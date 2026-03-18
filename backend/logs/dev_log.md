@@ -64,3 +64,15 @@ This log captures development actions and integrity checks performed on the syst
 - Added auto-refresh for active visitors and improved session-expired handling.
 - Integrity + Phase 4 tests re-run: all PASS.
 
+## 2026-03-18 15:01:52 +01:00
+- Phase 7: added env layering for dev/staging/prod with new .env example files and stricter production JWT secret check.
+- Added rate limiting (express-rate-limit) and file-based logging (app/error logs).
+- Added analytics metrics, history, visitor history, and CSV export endpoints + UI dashboards.
+- Implemented soft delete schema + indexes for visitors and visits (updated SQL + DB).
+- Added ops files for PM2, Nginx, and backup/restore scripts; added DEPLOYMENT.md.
+- Added Phase 7 test script; integrity check re-run after changes.
+
+## 2026-03-18 15:03:33 +01:00
+- Ran integrity check: DB OK, API health OK.
+- Ran Phase 7 tests: all PASS (dashboard metrics, analytics, history, export).
+
