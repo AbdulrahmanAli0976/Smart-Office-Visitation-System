@@ -38,6 +38,13 @@ export const api = {
   checkOut(visitId, token) {
     return request(`/visits/${visitId}/checkout`, { method: 'PUT', token });
   },
+  getSummaryReport(params = {}, token) {
+    const qs = new URLSearchParams();
+    if (params.from) qs.set('from', params.from);
+    if (params.to) qs.set('to', params.to);
+    const suffix = qs.toString();
+    return request(`/reports/summary${suffix ? `?${suffix}` : ''}`, { token });
+  },
   getOfficers(token) {
     return request('/admin/officers', { token });
   },
