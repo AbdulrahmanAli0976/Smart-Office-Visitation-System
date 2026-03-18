@@ -9,6 +9,44 @@ export async function createVisit({ visitorId, officerId, purpose, personToSee }
   return result.insertId;
 }
 
+export async function createVisitAtomic({ visitorId, officerId, purpose, personToSee }) {
+  const conn = await db.pool.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [activeRows] = await conn.execute(
+      `SELECT id
+       FROM visits
+       WHERE visitor_id = ? AND status = 'ACTIVE'
+       FOR UPDATE`,
+      [visitorId]
+    );
+
+    if (activeRows.length > 0) {
+      await conn.rollback();
+      return { conflict: true, visitId: activeRows[0].id };
+    }
+
+    const [result] = await conn.execute(
+      `INSERT INTO visits (visitor_id, officer_id, purpose, person_to_see, time_in, status)
+       VALUES (?, ?, ?, ?, NOW(), 'ACTIVE')`,
+      [visitorId, officerId, purpose, personToSee]
+    );
+
+    await conn.commit();
+    return { visitId: result.insertId };
+  } catch (err) {
+    try {
+      await conn.rollback();
+    } catch (_) {
+      // ignore rollback errors
+    }
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
 export async function completeVisit(visitId) {
   const result = await db.query(
     `UPDATE visits

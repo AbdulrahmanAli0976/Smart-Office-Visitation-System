@@ -1,7 +1,7 @@
 import express from 'express';
 import { requireAuth, requireActiveOfficer } from '../middleware/auth.js';
 import { createVisitor, searchVisitors, findDuplicates } from '../services/visitorService.js';
-import { createVisit, completeVisit, listActiveVisits, findActiveVisitByVisitor } from '../services/visitService.js';
+import { createVisitAtomic, completeVisit, listActiveVisits } from '../services/visitService.js';
 import { isNonEmptyString } from '../utils/validators.js';
 import { ok, fail } from '../utils/response.js';
 
@@ -67,20 +67,19 @@ router.post('/checkin', requireAuth, requireActiveOfficer, async (req, res, next
       selectedVisitor = { id: visitorId };
     }
 
-    const active = await findActiveVisitByVisitor(selectedVisitor.id);
-    if (active) {
-      return fail(res, 'Visitor is already checked in', 409);
-    }
-
-    const visitId = await createVisit({
+    const result = await createVisitAtomic({
       visitorId: selectedVisitor.id,
       officerId: req.user.id,
       purpose: purpose.trim(),
       personToSee: person_to_see.trim()
     });
 
+    if (result.conflict) {
+      return fail(res, 'Visitor is already checked in', 409);
+    }
+
     return ok(res, {
-      visit_id: visitId,
+      visit_id: result.visitId,
       visitor_id: selectedVisitor.id,
       duplicates
     }, 201);
