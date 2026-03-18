@@ -68,8 +68,13 @@ async function checkApi() {
   }
 }
 
-await checkDb();
-await checkApi();
+try {
+  await checkDb();
+  await checkApi();
+} finally {
+  // Ensure the pool closes so the script can exit cleanly.
+  await db.pool.end();
+}
 
 console.log('Integrity check results');
 console.log(`DB: ${results.db.ok ? 'OK' : 'FAILED'}`);
