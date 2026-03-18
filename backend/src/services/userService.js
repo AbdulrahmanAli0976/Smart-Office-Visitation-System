@@ -29,6 +29,14 @@ export async function findUserByEmail(email) {
   return rows[0] || null;
 }
 
+export async function findUserById(id) {
+  const rows = await db.query(
+    'SELECT id, full_name, email, role, status FROM users WHERE id = ?',
+    [id]
+  );
+  return rows[0] || null;
+}
+
 export async function listOfficers() {
   return db.query(
     `SELECT id, full_name, email, role, status, created_at, updated_at
