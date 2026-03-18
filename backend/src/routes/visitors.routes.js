@@ -1,6 +1,12 @@
 import express from 'express';
 import { requireAuth } from '../middleware/auth.js';
-import { createVisitor, findVisitorById, searchVisitors, findDuplicates } from '../services/visitorService.js';
+import {
+  createVisitor,
+  updateVisitor,
+  findVisitorById,
+  searchVisitors,
+  findDuplicates
+} from '../services/visitorService.js';
 import { isNonEmptyString } from '../utils/validators.js';
 
 const router = express.Router();
@@ -56,6 +62,46 @@ router.post('/', requireAuth, async (req, res, next) => {
 
     const visitor = await findVisitorById(id);
     return res.status(201).json({ visitor, duplicates });
+  } catch (err) {
+    if (err.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ error: 'Visitor code must be unique' });
+    }
+    return next(err);
+  }
+});
+
+router.put('/:id', requireAuth, async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ error: 'Invalid visitor id' });
+    }
+
+    const { full_name, phone_number, visitor_type, code } = req.body || {};
+    const error = validateVisitor({ full_name, phone_number, visitor_type, code });
+    if (error) {
+      return res.status(400).json({ error });
+    }
+
+    const duplicates = await findDuplicates({
+      fullName: full_name.trim(),
+      phoneNumber: phone_number,
+      excludeId: id
+    });
+
+    const updated = await updateVisitor(id, {
+      fullName: full_name.trim(),
+      phoneNumber: phone_number,
+      visitorType: visitor_type,
+      code: code
+    });
+
+    if (!updated) {
+      return res.status(404).json({ error: 'Visitor not found' });
+    }
+
+    const visitor = await findVisitorById(id);
+    return res.json({ visitor, duplicates });
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY') {
       return res.status(409).json({ error: 'Visitor code must be unique' });

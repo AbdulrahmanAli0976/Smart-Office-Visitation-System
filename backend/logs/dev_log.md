@@ -26,3 +26,8 @@ This log captures development actions and integrity checks performed on the syst
 - Updated `backend/scripts/integrity-check.js` to close DB pool so the script exits cleanly.
 - Integrity check result: DB OK, API /api/health OK.
 
+## 2026-03-18 12:16:36 +01:00
+- Phase 3 backend updates: added active-officer enforcement for check-in/check-out.
+- Added visitor update endpoint and service, plus duplicate detection support for updates.
+- Enhanced auth middleware to verify officer status against the DB on check-in/check-out.
+

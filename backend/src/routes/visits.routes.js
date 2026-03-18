@@ -1,5 +1,5 @@
 import express from 'express';
-import { requireAuth } from '../middleware/auth.js';
+import { requireAuth, requireActiveOfficer } from '../middleware/auth.js';
 import { createVisitor, searchVisitors, findDuplicates } from '../services/visitorService.js';
 import { createVisit, completeVisit, listActiveVisits, findActiveVisitByVisitor } from '../services/visitService.js';
 import { isNonEmptyString } from '../utils/validators.js';
@@ -28,7 +28,7 @@ function validateVisitorInput(visitor) {
   return null;
 }
 
-router.post('/checkin', requireAuth, async (req, res, next) => {
+router.post('/checkin', requireAuth, requireActiveOfficer, async (req, res, next) => {
   try {
     const { query, visitor, purpose, person_to_see } = req.body || {};
 
@@ -100,7 +100,7 @@ router.get('/active', requireAuth, async (req, res, next) => {
   }
 });
 
-router.put('/:id/checkout', requireAuth, async (req, res, next) => {
+router.put('/:id/checkout', requireAuth, requireActiveOfficer, async (req, res, next) => {
   try {
     const updated = await completeVisit(req.params.id);
     if (!updated) {
