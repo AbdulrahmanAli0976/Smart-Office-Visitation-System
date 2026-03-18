@@ -31,3 +31,8 @@ This log captures development actions and integrity checks performed on the syst
 - Added visitor update endpoint and service, plus duplicate detection support for updates.
 - Enhanced auth middleware to verify officer status against the DB on check-in/check-out.
 
+## 2026-03-18 12:26:26 +01:00
+- Ran integrity check: DB OK, API health OK.
+- Verified INACTIVE officer enforcement: check-in blocked with 403.
+- Removed temporary verification script `backend/scripts/inactive-officer-check.js`.
+
