@@ -2,5 +2,16 @@ node_modules/
 .env
 .env.local
 .env.*.local
+.env.development
+.env.staging
+.env.production
 frontend/dist/
 backend/.env
+backend/logs/*.log
+backend/logs/*.txt
+backend/logs/*.json
+frontend/.env
+frontend/.env.local
+frontend/.env.development
+frontend/.env.staging
+frontend/.env.production

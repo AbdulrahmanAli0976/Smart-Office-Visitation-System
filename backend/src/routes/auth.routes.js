@@ -5,6 +5,7 @@ import { env } from '../config/env.js';
 import { createOfficer, findUserByEmail } from '../services/userService.js';
 import { isEmail, isNonEmptyString } from '../utils/validators.js';
 import { ok, fail } from '../utils/response.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -37,20 +38,24 @@ router.post('/login', async (req, res, next) => {
     const { email, password } = req.body || {};
 
     if (!isEmail(email) || !isNonEmptyString(password)) {
+      logger.warn('auth.login_failed', { reason: 'invalid_payload', email });
       return fail(res, 'Invalid login credentials', 400);
     }
 
     const user = await findUserByEmail(email.trim());
     if (!user) {
+      logger.warn('auth.login_failed', { reason: 'user_not_found', email });
       return fail(res, 'Invalid email or password', 401);
     }
 
     if (user.status !== 'ACTIVE') {
+      logger.warn('auth.login_failed', { reason: 'inactive', email, status: user.status });
       return fail(res, 'Account not active. Await approval or contact admin.', 403);
     }
 
     const okPassword = await bcrypt.compare(password, user.password_hash);
     if (!okPassword) {
+      logger.warn('auth.login_failed', { reason: 'bad_password', email });
       return fail(res, 'Invalid email or password', 401);
     }
 
