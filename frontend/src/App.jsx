@@ -217,6 +217,7 @@ export default function App() {
     try {
       await api.checkOut(visitId, token);
       await refreshActiveVisits(token);
+      await refreshReport(token);
       setMessage('Visit checked out.');
     } catch (err) {
       if (!handleAuthFailure(err)) {

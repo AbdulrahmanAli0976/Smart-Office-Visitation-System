@@ -1,3 +1,5 @@
+import { fail } from '../utils/response.js';
+
 export function errorHandler(err, req, res, next) {
   const status = err.status || 500;
   const message = err.message || 'Internal server error';
@@ -6,5 +8,5 @@ export function errorHandler(err, req, res, next) {
     console.error(err);
   }
 
-  res.status(status).json({ error: message });
+  return fail(res, message, status);
 }

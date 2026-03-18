@@ -8,6 +8,7 @@ import {
   findDuplicates
 } from '../services/visitorService.js';
 import { isNonEmptyString } from '../utils/validators.js';
+import { ok, fail } from '../utils/response.js';
 
 const router = express.Router();
 
@@ -34,7 +35,7 @@ router.get('/search', requireAuth, async (req, res, next) => {
   try {
     const { q } = req.query;
     const results = await searchVisitors(q, 20);
-    return res.json(results);
+    return ok(res, results);
   } catch (err) {
     return next(err);
   }
@@ -45,7 +46,7 @@ router.post('/', requireAuth, async (req, res, next) => {
     const { full_name, phone_number, visitor_type, code } = req.body || {};
     const error = validateVisitor({ full_name, phone_number, visitor_type, code });
     if (error) {
-      return res.status(400).json({ error });
+      return fail(res, error, 400);
     }
 
     const duplicates = await findDuplicates({
@@ -61,10 +62,10 @@ router.post('/', requireAuth, async (req, res, next) => {
     });
 
     const visitor = await findVisitorById(id);
-    return res.status(201).json({ visitor, duplicates });
+    return ok(res, { visitor, duplicates }, 201);
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ error: 'Visitor code must be unique' });
+      return fail(res, 'Visitor code must be unique', 409);
     }
     return next(err);
   }
@@ -74,13 +75,13 @@ router.put('/:id', requireAuth, async (req, res, next) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) {
-      return res.status(400).json({ error: 'Invalid visitor id' });
+      return fail(res, 'Invalid visitor id', 400);
     }
 
     const { full_name, phone_number, visitor_type, code } = req.body || {};
     const error = validateVisitor({ full_name, phone_number, visitor_type, code });
     if (error) {
-      return res.status(400).json({ error });
+      return fail(res, error, 400);
     }
 
     const duplicates = await findDuplicates({
@@ -97,14 +98,14 @@ router.put('/:id', requireAuth, async (req, res, next) => {
     });
 
     if (!updated) {
-      return res.status(404).json({ error: 'Visitor not found' });
+      return fail(res, 'Visitor not found', 404);
     }
 
     const visitor = await findVisitorById(id);
-    return res.json({ visitor, duplicates });
+    return ok(res, { visitor, duplicates });
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ error: 'Visitor code must be unique' });
+      return fail(res, 'Visitor code must be unique', 409);
     }
     return next(err);
   }
@@ -114,9 +115,9 @@ router.get('/:id', requireAuth, async (req, res, next) => {
   try {
     const visitor = await findVisitorById(req.params.id);
     if (!visitor) {
-      return res.status(404).json({ error: 'Visitor not found' });
+      return fail(res, 'Visitor not found', 404);
     }
-    return res.json(visitor);
+    return ok(res, visitor);
   } catch (err) {
     return next(err);
   }

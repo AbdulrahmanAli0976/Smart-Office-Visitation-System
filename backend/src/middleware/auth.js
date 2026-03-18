@@ -1,13 +1,14 @@
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { findUserById } from '../services/userService.js';
+import { fail } from '../utils/response.js';
 
 export function requireAuth(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
 
   if (!token) {
-    return res.status(401).json({ error: 'Missing authorization token' });
+    return fail(res, 'Missing authorization token', 401);
   }
 
   try {
@@ -15,14 +16,14 @@ export function requireAuth(req, res, next) {
     req.user = payload;
     return next();
   } catch (err) {
-    return res.status(401).json({ error: 'Invalid or expired token' });
+    return fail(res, 'Invalid or expired token', 401);
   }
 }
 
 export function requireRole(...roles) {
   return (req, res, next) => {
     if (!req.user || !roles.includes(req.user.role)) {
-      return res.status(403).json({ error: 'Forbidden' });
+      return fail(res, 'Forbidden', 403);
     }
     return next();
   };
@@ -31,20 +32,20 @@ export function requireRole(...roles) {
 export async function requireActiveOfficer(req, res, next) {
   try {
     if (!req.user) {
-      return res.status(401).json({ error: 'Missing authorization token' });
+      return fail(res, 'Missing authorization token', 401);
     }
 
     if (req.user.role !== 'OFFICER') {
-      return res.status(403).json({ error: 'Only officers can perform this action' });
+      return fail(res, 'Only officers can perform this action', 403);
     }
 
     const user = await findUserById(req.user.id);
     if (!user) {
-      return res.status(401).json({ error: 'Invalid user' });
+      return fail(res, 'Invalid user', 401);
     }
 
     if (user.status !== 'ACTIVE') {
-      return res.status(403).json({ error: 'Officer account is not active' });
+      return fail(res, 'Officer account is not active', 403);
     }
 
     return next();

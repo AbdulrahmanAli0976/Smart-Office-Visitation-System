@@ -1,6 +1,7 @@
 import express from 'express';
 import { requireAuth } from '../middleware/auth.js';
 import { getSummary } from '../services/reportService.js';
+import { ok, fail } from '../utils/response.js';
 
 const router = express.Router();
 
@@ -13,11 +14,11 @@ router.get('/summary', requireAuth, async (req, res, next) => {
     const { from, to } = req.query || {};
 
     if ((from && !isValidDate(from)) || (to && !isValidDate(to))) {
-      return res.status(400).json({ error: 'Invalid date format. Use YYYY-MM-DD.' });
+      return fail(res, 'Invalid date format. Use YYYY-MM-DD.', 400);
     }
 
     const summary = await getSummary({ from, to });
-    return res.json(summary);
+    return ok(res, summary);
   } catch (err) {
     return next(err);
   }
