@@ -41,3 +41,10 @@ This log captures development actions and integrity checks performed on the syst
 - Added frontend analytics panel and toggle (today vs all-time).
 - Added inline UI validation for search and check-in fields.
 
+## 2026-03-18 12:54:25 +01:00
+- Standardized API responses to `{ success, data }` / `{ success, error }` across backend routes and middleware.
+- Updated frontend API client to consume standardized responses.
+- Added Phase 4 functional + edge test script `backend/scripts/phase4-tests.js`.
+- Ran integrity check: DB OK, API health OK.
+- Ran Phase 4 tests: all PASS.
+

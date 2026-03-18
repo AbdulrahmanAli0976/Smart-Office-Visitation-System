@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env.js';
 import { createOfficer, findUserByEmail } from '../services/userService.js';
 import { isEmail, isNonEmptyString } from '../utils/validators.js';
+import { ok, fail } from '../utils/response.js';
 
 const router = express.Router();
 
@@ -12,20 +13,20 @@ router.post('/register', async (req, res, next) => {
     const { full_name, email, password } = req.body || {};
 
     if (!isNonEmptyString(full_name) || !isEmail(email) || !isNonEmptyString(password)) {
-      return res.status(400).json({ error: 'Invalid registration data' });
+      return fail(res, 'Invalid registration data', 400);
     }
 
     const existing = await findUserByEmail(email);
     if (existing) {
-      return res.status(409).json({ error: 'Email already registered' });
+      return fail(res, 'Email already registered', 409);
     }
 
     const id = await createOfficer({ fullName: full_name.trim(), email: email.trim(), password });
-    return res.status(201).json({
+    return ok(res, {
       id,
       status: 'PENDING',
       message: 'Registration submitted. Await admin approval.'
-    });
+    }, 201);
   } catch (err) {
     return next(err);
   }
@@ -36,21 +37,21 @@ router.post('/login', async (req, res, next) => {
     const { email, password } = req.body || {};
 
     if (!isEmail(email) || !isNonEmptyString(password)) {
-      return res.status(400).json({ error: 'Invalid login credentials' });
+      return fail(res, 'Invalid login credentials', 400);
     }
 
     const user = await findUserByEmail(email.trim());
     if (!user) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+      return fail(res, 'Invalid email or password', 401);
     }
 
     if (user.status !== 'ACTIVE') {
-      return res.status(403).json({ error: 'Account not active. Await approval or contact admin.' });
+      return fail(res, 'Account not active. Await approval or contact admin.', 403);
     }
 
-    const ok = await bcrypt.compare(password, user.password_hash);
-    if (!ok) {
-      return res.status(401).json({ error: 'Invalid email or password' });
+    const okPassword = await bcrypt.compare(password, user.password_hash);
+    if (!okPassword) {
+      return fail(res, 'Invalid email or password', 401);
     }
 
     const token = jwt.sign(
@@ -59,7 +60,7 @@ router.post('/login', async (req, res, next) => {
       { expiresIn: env.jwt.expiresIn }
     );
 
-    return res.json({
+    return ok(res, {
       token,
       user: {
         id: user.id,

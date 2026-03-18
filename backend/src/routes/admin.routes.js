@@ -1,6 +1,7 @@
 import express from 'express';
 import { listOfficers, updateOfficerStatus, deleteOfficer } from '../services/userService.js';
 import { requireAuth, requireRole } from '../middleware/auth.js';
+import { ok, fail } from '../utils/response.js';
 
 const router = express.Router();
 
@@ -9,7 +10,7 @@ router.use(requireAuth, requireRole('ADMIN'));
 router.get('/officers', async (req, res, next) => {
   try {
     const officers = await listOfficers();
-    return res.json(officers);
+    return ok(res, officers);
   } catch (err) {
     return next(err);
   }
@@ -20,9 +21,9 @@ router.put('/officers/:id/approve', async (req, res, next) => {
     const { id } = req.params;
     const updated = await updateOfficerStatus(id, 'ACTIVE');
     if (!updated) {
-      return res.status(404).json({ error: 'Officer not found' });
+      return fail(res, 'Officer not found', 404);
     }
-    return res.json({ status: 'ACTIVE' });
+    return ok(res, { status: 'ACTIVE' });
   } catch (err) {
     return next(err);
   }
@@ -33,9 +34,9 @@ router.put('/officers/:id/deactivate', async (req, res, next) => {
     const { id } = req.params;
     const updated = await updateOfficerStatus(id, 'INACTIVE');
     if (!updated) {
-      return res.status(404).json({ error: 'Officer not found' });
+      return fail(res, 'Officer not found', 404);
     }
-    return res.json({ status: 'INACTIVE' });
+    return ok(res, { status: 'INACTIVE' });
   } catch (err) {
     return next(err);
   }
@@ -46,9 +47,9 @@ router.delete('/officers/:id', async (req, res, next) => {
     const { id } = req.params;
     const deleted = await deleteOfficer(id);
     if (!deleted) {
-      return res.status(404).json({ error: 'Officer not found' });
+      return fail(res, 'Officer not found', 404);
     }
-    return res.status(204).send();
+    return ok(res, { deleted: true });
   } catch (err) {
     return next(err);
   }

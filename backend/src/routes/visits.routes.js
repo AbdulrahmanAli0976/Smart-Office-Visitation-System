@@ -3,6 +3,7 @@ import { requireAuth, requireActiveOfficer } from '../middleware/auth.js';
 import { createVisitor, searchVisitors, findDuplicates } from '../services/visitorService.js';
 import { createVisit, completeVisit, listActiveVisits, findActiveVisitByVisitor } from '../services/visitService.js';
 import { isNonEmptyString } from '../utils/validators.js';
+import { ok, fail } from '../utils/response.js';
 
 const router = express.Router();
 
@@ -33,7 +34,7 @@ router.post('/checkin', requireAuth, requireActiveOfficer, async (req, res, next
     const { query, visitor, purpose, person_to_see } = req.body || {};
 
     if (!isNonEmptyString(purpose) || !isNonEmptyString(person_to_see)) {
-      return res.status(400).json({ error: 'Purpose and person to see are required' });
+      return fail(res, 'Purpose and person to see are required', 400);
     }
 
     let selectedVisitor = null;
@@ -48,7 +49,7 @@ router.post('/checkin', requireAuth, requireActiveOfficer, async (req, res, next
     if (!selectedVisitor) {
       const error = validateVisitorInput(visitor);
       if (error) {
-        return res.status(400).json({ error });
+        return fail(res, error, 400);
       }
 
       duplicates = await findDuplicates({
@@ -68,7 +69,7 @@ router.post('/checkin', requireAuth, requireActiveOfficer, async (req, res, next
 
     const active = await findActiveVisitByVisitor(selectedVisitor.id);
     if (active) {
-      return res.status(409).json({ error: 'Visitor is already checked in', visit_id: active.id });
+      return fail(res, 'Visitor is already checked in', 409);
     }
 
     const visitId = await createVisit({
@@ -78,14 +79,14 @@ router.post('/checkin', requireAuth, requireActiveOfficer, async (req, res, next
       personToSee: person_to_see.trim()
     });
 
-    return res.status(201).json({
+    return ok(res, {
       visit_id: visitId,
       visitor_id: selectedVisitor.id,
       duplicates
-    });
+    }, 201);
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY') {
-      return res.status(409).json({ error: 'Visitor code must be unique' });
+      return fail(res, 'Visitor code must be unique', 409);
     }
     return next(err);
   }
@@ -94,7 +95,7 @@ router.post('/checkin', requireAuth, requireActiveOfficer, async (req, res, next
 router.get('/active', requireAuth, async (req, res, next) => {
   try {
     const visits = await listActiveVisits();
-    return res.json(visits);
+    return ok(res, visits);
   } catch (err) {
     return next(err);
   }
@@ -104,9 +105,9 @@ router.put('/:id/checkout', requireAuth, requireActiveOfficer, async (req, res, 
   try {
     const updated = await completeVisit(req.params.id);
     if (!updated) {
-      return res.status(404).json({ error: 'Active visit not found' });
+      return fail(res, 'Active visit not found', 404);
     }
-    return res.json({ status: 'COMPLETED' });
+    return ok(res, { status: 'COMPLETED' });
   } catch (err) {
     return next(err);
   }

@@ -57,7 +57,12 @@ async function checkApi() {
   try {
     const response = await httpGetJson(url);
     results.api.status = response.status;
-    results.api.ok = response.status === 200 && response.body && response.body.status === 'ok';
+    results.api.ok =
+      response.status === 200 &&
+      response.body &&
+      response.body.success === true &&
+      response.body.data &&
+      response.body.data.status === 'ok';
     if (!results.api.ok) {
       results.api.error = `Unexpected response status ${response.status}`;
     }

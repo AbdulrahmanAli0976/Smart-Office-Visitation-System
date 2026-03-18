@@ -11,9 +11,12 @@ async function request(path, { method = 'GET', body, token } = {}) {
   });
 
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
+  if (!res.ok || data?.success === false) {
     const error = data?.error || 'Request failed';
     throw new Error(error);
+  }
+  if (data && Object.prototype.hasOwnProperty.call(data, 'data')) {
+    return data.data;
   }
   return data;
 }
