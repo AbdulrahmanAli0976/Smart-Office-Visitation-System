@@ -56,3 +56,11 @@ This log captures development actions and integrity checks performed on the syst
 - Added ErrorBoundary to prevent UI crashes.
 - Integrity check and Phase 4 test suite re-run: all PASS.
 
+## 2026-03-18 13:36:35 +01:00
+- Phase 6: added analytics endpoints (dashboard metrics, visitors per day, visitor type distribution).
+- Added visit history and visitor history endpoints with filters + CSV export.
+- Implemented soft delete columns + indexes for visitors and visits; updated queries to ignore deleted records.
+- UI: added dashboard metrics, analytics charts, visit history panel, visitor history viewer, and CSV export.
+- Added auto-refresh for active visitors and improved session-expired handling.
+- Integrity + Phase 4 tests re-run: all PASS.
+

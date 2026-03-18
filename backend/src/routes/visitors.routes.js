@@ -7,6 +7,7 @@ import {
   searchVisitors,
   findDuplicates
 } from '../services/visitorService.js';
+import { listVisitorHistory } from '../services/visitService.js';
 import { isNonEmptyString } from '../utils/validators.js';
 import { ok, fail } from '../utils/response.js';
 
@@ -118,6 +119,20 @@ router.get('/:id', requireAuth, async (req, res, next) => {
       return fail(res, 'Visitor not found', 404);
     }
     return ok(res, visitor);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.get('/:id/history', requireAuth, async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      return fail(res, 'Invalid visitor id', 400);
+    }
+
+    const history = await listVisitorHistory(id);
+    return ok(res, history);
   } catch (err) {
     return next(err);
   }

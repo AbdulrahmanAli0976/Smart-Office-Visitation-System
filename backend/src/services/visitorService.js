@@ -14,7 +14,7 @@ export async function updateVisitor(id, { fullName, phoneNumber, visitorType, co
   const result = await db.query(
     `UPDATE visitors
      SET full_name = ?, phone_number = ?, visitor_type = ?, code = ?, updated_at = NOW()
-     WHERE id = ?`,
+     WHERE id = ? AND deleted_at IS NULL`,
     [fullName, normalizePhone(phoneNumber), visitorType, code || null, id]
   );
   return result.affectedRows;
@@ -22,7 +22,7 @@ export async function updateVisitor(id, { fullName, phoneNumber, visitorType, co
 
 export async function findVisitorById(id) {
   const rows = await db.query(
-    'SELECT id, full_name, phone_number, visitor_type, code, created_at, updated_at FROM visitors WHERE id = ?',
+    'SELECT id, full_name, phone_number, visitor_type, code, created_at, updated_at FROM visitors WHERE id = ? AND deleted_at IS NULL',
     [id]
   );
   return rows[0] || null;
@@ -46,7 +46,8 @@ export async function searchVisitors(query, limit = 20) {
               ELSE 4
             END AS priority
      FROM visitors
-     WHERE code = ? OR phone_number = ? OR phone_number LIKE ? OR full_name LIKE ?
+     WHERE deleted_at IS NULL
+       AND (code = ? OR phone_number = ? OR phone_number LIKE ? OR full_name LIKE ?)
      ORDER BY priority ASC, full_name ASC
      LIMIT ?`,
     [q, normalizedPhone, phoneLike, nameLike, q, normalizedPhone, phoneLike, nameLike, limit]
@@ -63,7 +64,8 @@ export async function findDuplicates({ fullName, phoneNumber, excludeId = null }
   return db.query(
     `SELECT id, full_name, phone_number, visitor_type, code
      FROM visitors
-     WHERE (phone_number = ?
+     WHERE deleted_at IS NULL
+       AND (phone_number = ?
         OR full_name LIKE ?
         OR SOUNDEX(full_name) = SOUNDEX(?))${excludeSql}
      ORDER BY full_name ASC

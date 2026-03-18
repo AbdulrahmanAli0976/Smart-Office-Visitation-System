@@ -7,6 +7,10 @@ import QuickActions from './components/QuickActions.jsx';
 import AuthPanel from './components/AuthPanel.jsx';
 import AdminPanel from './components/AdminPanel.jsx';
 import ReportsPanel from './components/ReportsPanel.jsx';
+import DashboardMetrics from './components/DashboardMetrics.jsx';
+import AnalyticsCharts from './components/AnalyticsCharts.jsx';
+import VisitHistoryPanel from './components/VisitHistoryPanel.jsx';
+import VisitorHistoryPanel from './components/VisitorHistoryPanel.jsx';
 
 const VISITOR_TYPES = [
   { value: 'BD', label: 'BD (Code required)' },
@@ -20,6 +24,12 @@ const NO_CODE = new Set(['AGENT_MERCHANT']);
 
 function formatDateOnly(date) {
   return date.toISOString().slice(0, 10);
+}
+
+function daysAgo(days) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return formatDateOnly(date);
 }
 
 export default function App() {
@@ -62,6 +72,25 @@ export default function App() {
   const [reportLoading, setReportLoading] = useState(false);
   const [reportRange, setReportRange] = useState('today');
 
+  const [dashboardMetrics, setDashboardMetrics] = useState(null);
+  const [dashboardLoading, setDashboardLoading] = useState(false);
+  const [perDay, setPerDay] = useState([]);
+  const [typeDistribution, setTypeDistribution] = useState([]);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+
+  const [historyFilters, setHistoryFilters] = useState({
+    from: daysAgo(7),
+    to: formatDateOnly(new Date()),
+    visitor_type: '',
+    officer_id: ''
+  });
+  const [visitHistory, setVisitHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+
+  const [selectedVisitor, setSelectedVisitor] = useState(null);
+  const [visitorHistory, setVisitorHistory] = useState([]);
+  const [visitorHistoryLoading, setVisitorHistoryLoading] = useState(false);
+
   useEffect(() => {
     if (token) {
       localStorage.setItem('vms_token', token);
@@ -86,11 +115,23 @@ export default function App() {
     setResults([]);
     setDuplicates([]);
     setReportSummary(null);
+    setDashboardMetrics(null);
+    setPerDay([]);
+    setTypeDistribution([]);
+    setVisitHistory([]);
+    setSelectedVisitor(null);
+    setVisitorHistory([]);
     setMessage(note || 'Logged out.');
   };
 
   const handleAuthFailure = (err) => {
-    if (String(err.message || '').toLowerCase().includes('token')) {
+    const msg = String(err.message || '').toLowerCase();
+    if (
+      msg.includes('token') ||
+      msg.includes('authorization') ||
+      msg.includes('expired') ||
+      msg.includes('invalid')
+    ) {
       logout('Session expired. Please log in again.');
       return true;
     }
@@ -139,16 +180,83 @@ export default function App() {
     }
   };
 
+  const refreshDashboard = async (authToken) => {
+    setDashboardLoading(true);
+    try {
+      const data = await api.getDashboardMetrics(authToken);
+      setDashboardMetrics(data);
+    } catch (err) {
+      if (!handleAuthFailure(err)) {
+        setError(err.message);
+      }
+    } finally {
+      setDashboardLoading(false);
+    }
+  };
+
+  const refreshAnalytics = async (authToken) => {
+    setAnalyticsLoading(true);
+    try {
+      const range = { from: daysAgo(6), to: formatDateOnly(new Date()) };
+      const perDayData = await api.getVisitorsPerDay(range, authToken);
+      const typeData = await api.getVisitorTypeDistribution(range, authToken);
+      setPerDay(perDayData);
+      setTypeDistribution(typeData);
+    } catch (err) {
+      if (!handleAuthFailure(err)) {
+        setError(err.message);
+      }
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  };
+
+  const refreshVisitHistory = async (authToken, filters = historyFilters) => {
+    setHistoryLoading(true);
+    try {
+      const params = { ...filters };
+      if (user && user.role !== 'ADMIN') {
+        params.officer_id = user.id;
+      }
+      const data = await api.getVisitHistory(params, authToken);
+      setVisitHistory(data);
+    } catch (err) {
+      if (!handleAuthFailure(err)) {
+        setError(err.message);
+      }
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!token) return;
     refreshActiveVisits(token);
     refreshReport(token);
+    refreshDashboard(token);
+    refreshAnalytics(token);
+    refreshVisitHistory(token);
   }, [token]);
 
   useEffect(() => {
     if (!token || !user || user.role !== 'ADMIN') return;
     refreshOfficers(token);
   }, [token, user]);
+
+  useEffect(() => {
+    if (!token) return undefined;
+    const interval = setInterval(() => {
+      refreshActiveVisits(token);
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [token]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (user.role !== 'ADMIN') {
+      setHistoryFilters((prev) => ({ ...prev, officer_id: user.id }));
+    }
+  }, [user]);
 
   const handleLogin = async (payload) => {
     setAuthError('');
@@ -218,6 +326,7 @@ export default function App() {
       await api.checkOut(visitId, token);
       await refreshActiveVisits(token);
       await refreshReport(token);
+      await refreshDashboard(token);
       setMessage('Visit checked out.');
     } catch (err) {
       if (!handleAuthFailure(err)) {
@@ -288,6 +397,7 @@ export default function App() {
       const response = await api.checkIn(payload, token);
       await refreshActiveVisits(token);
       await refreshReport(token);
+      await refreshDashboard(token);
       setMessage('Visitor checked in successfully.');
       setDuplicates(response.duplicates || []);
     } catch (err) {
@@ -353,6 +463,14 @@ export default function App() {
     }
   };
 
+  const toggleReportRange = () => {
+    const next = reportRange === 'today' ? 'all' : 'today';
+    setReportRange(next);
+    if (token) {
+      refreshReport(token, next);
+    }
+  };
+
   const handleSelectVisitor = (visitor) => {
     const pick = visitor.code || visitor.phone_number || visitor.full_name;
     setQuery(pick || '');
@@ -360,11 +478,50 @@ export default function App() {
     setFieldErrors((prev) => ({ ...prev, query: '' }));
     setMessage('Visitor selected. Complete check-in details and confirm.');
   };
-  const toggleReportRange = () => {
-    const next = reportRange === 'today' ? 'all' : 'today';
-    setReportRange(next);
-    if (token) {
-      refreshReport(token, next);
+
+  const handleViewHistory = async (visitor) => {
+    if (!token) return;
+    setVisitorHistoryLoading(true);
+    setSelectedVisitor(visitor);
+    try {
+      const history = await api.getVisitorHistory(visitor.id, token);
+      setVisitorHistory(history);
+    } catch (err) {
+      if (!handleAuthFailure(err)) {
+        setError(err.message);
+      }
+    } finally {
+      setVisitorHistoryLoading(false);
+    }
+  };
+
+  const handleCloseVisitorHistory = () => {
+    setSelectedVisitor(null);
+    setVisitorHistory([]);
+  };
+
+  const handleExport = async () => {
+    if (!token) return;
+    try {
+      const params = { ...historyFilters };
+      if (user && user.role !== 'ADMIN') {
+        params.officer_id = user.id;
+      }
+      const csv = await api.exportVisits(params, token);
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'visits_export.csv';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      setMessage('Export ready.');
+    } catch (err) {
+      if (!handleAuthFailure(err)) {
+        setError(err.message || 'Export failed');
+      }
     }
   };
 
@@ -375,7 +532,12 @@ export default function App() {
     return (
       <div className="grid gap-4 md:grid-cols-2">
         {results.map((visitor) => (
-          <VisitorCard key={visitor.id} visitor={visitor} onSelect={handleSelectVisitor} />
+          <VisitorCard
+            key={visitor.id}
+            visitor={visitor}
+            onSelect={handleSelectVisitor}
+            onHistory={handleViewHistory}
+          />
         ))}
       </div>
     );
@@ -421,6 +583,8 @@ export default function App() {
 
         {user && (
           <>
+            <DashboardMetrics metrics={dashboardMetrics} loading={dashboardLoading} />
+
             <SearchBar
               value={query}
               onChange={(value) => {
@@ -456,6 +620,8 @@ export default function App() {
               rangeLabel={reportRange === 'today' ? 'Today' : 'All time'}
               onToggleRange={toggleReportRange}
             />
+
+            <AnalyticsCharts perDay={perDay} typeDistribution={typeDistribution} loading={analyticsLoading} />
 
             <section className="grid gap-6 lg:grid-cols-[2fr_1fr]">
               <div className="space-y-4">
@@ -563,6 +729,29 @@ export default function App() {
 
             <ActiveVisitors visits={activeVisits} onCheckout={handleCheckout} loading={actionLoading} />
 
+            <VisitHistoryPanel
+              filters={historyFilters}
+              onChange={setHistoryFilters}
+              onApply={() => refreshVisitHistory(token)}
+              onExport={handleExport}
+              visits={visitHistory}
+              loading={historyLoading}
+              officers={adminOfficers}
+              isAdmin={user.role === 'ADMIN'}
+            />
+
+            {visitorHistoryLoading && (
+              <div className="clay-card px-5 py-3 text-sm text-clay-600">Loading visitor history...</div>
+            )}
+
+            {selectedVisitor && !visitorHistoryLoading && (
+              <VisitorHistoryPanel
+                visitor={selectedVisitor}
+                visits={visitorHistory}
+                onClose={handleCloseVisitorHistory}
+              />
+            )}
+
             {user.role === 'ADMIN' && (
               <AdminPanel
                 officers={adminOfficers}
@@ -578,5 +767,3 @@ export default function App() {
     </div>
   );
 }
-
-
