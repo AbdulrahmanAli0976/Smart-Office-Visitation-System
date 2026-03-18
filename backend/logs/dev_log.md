@@ -48,3 +48,11 @@ This log captures development actions and integrity checks performed on the syst
 - Ran integrity check: DB OK, API health OK.
 - Ran Phase 4 tests: all PASS.
 
+## 2026-03-18 13:10:47 +01:00
+- Phase 5: added transactional check-in (`createVisitAtomic`) to prevent race conditions and duplicate ACTIVE visits.
+- Improved visitor search ranking (exact phone match prioritized over partial).
+- Added index `idx_visits_visitor_status` on visits for faster active-visit checks.
+- UI polish: active visitors show officer + type, search auto-focus, quick select from search results.
+- Added ErrorBoundary to prevent UI crashes.
+- Integrity check and Phase 4 test suite re-run: all PASS.
+

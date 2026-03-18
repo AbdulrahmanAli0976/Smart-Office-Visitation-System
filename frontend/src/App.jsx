@@ -353,6 +353,13 @@ export default function App() {
     }
   };
 
+  const handleSelectVisitor = (visitor) => {
+    const pick = visitor.code || visitor.phone_number || visitor.full_name;
+    setQuery(pick || '');
+    setCreateNew(false);
+    setFieldErrors((prev) => ({ ...prev, query: '' }));
+    setMessage('Visitor selected. Complete check-in details and confirm.');
+  };
   const toggleReportRange = () => {
     const next = reportRange === 'today' ? 'all' : 'today';
     setReportRange(next);
@@ -368,7 +375,7 @@ export default function App() {
     return (
       <div className="grid gap-4 md:grid-cols-2">
         {results.map((visitor) => (
-          <VisitorCard key={visitor.id} visitor={visitor} />
+          <VisitorCard key={visitor.id} visitor={visitor} onSelect={handleSelectVisitor} />
         ))}
       </div>
     );
@@ -571,3 +578,5 @@ export default function App() {
     </div>
   );
 }
+
+

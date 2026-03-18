@@ -32,22 +32,24 @@ export async function searchVisitors(query, limit = 20) {
   const q = String(query || '').trim();
   if (!q) return [];
 
-  const phoneLike = `%${sanitizeLike(normalizePhone(q))}%`;
+  const normalizedPhone = normalizePhone(q);
+  const phoneLike = `%${sanitizeLike(normalizedPhone)}%`;
   const nameLike = `%${sanitizeLike(q)}%`;
 
   return db.query(
     `SELECT id, full_name, phone_number, visitor_type, code,
             CASE
               WHEN code = ? THEN 0
-              WHEN phone_number LIKE ? THEN 1
-              WHEN full_name LIKE ? THEN 2
-              ELSE 3
+              WHEN phone_number = ? THEN 1
+              WHEN phone_number LIKE ? THEN 2
+              WHEN full_name LIKE ? THEN 3
+              ELSE 4
             END AS priority
      FROM visitors
-     WHERE code = ? OR phone_number LIKE ? OR full_name LIKE ?
+     WHERE code = ? OR phone_number = ? OR phone_number LIKE ? OR full_name LIKE ?
      ORDER BY priority ASC, full_name ASC
      LIMIT ?`,
-    [q, phoneLike, nameLike, q, phoneLike, nameLike, limit]
+    [q, normalizedPhone, phoneLike, nameLike, q, normalizedPhone, phoneLike, nameLike, limit]
   );
 }
 

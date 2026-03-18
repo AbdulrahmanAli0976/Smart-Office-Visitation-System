@@ -38,5 +38,7 @@ CREATE TABLE IF NOT EXISTS visits (
   CONSTRAINT fk_visits_visitor FOREIGN KEY (visitor_id) REFERENCES visitors(id),
   CONSTRAINT fk_visits_officer FOREIGN KEY (officer_id) REFERENCES users(id),
   INDEX idx_visits_status (status),
-  INDEX idx_visits_time_in (time_in)
+  INDEX idx_visits_time_in (time_in),
+  INDEX idx_visits_visitor_status (visitor_id, status)
 );
+

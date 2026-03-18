@@ -7,7 +7,7 @@ const TYPE_STYLES = {
   AGENT_MERCHANT: 'bg-gray-100 text-gray-700 border-gray-200'
 };
 
-export default function VisitorCard({ visitor }) {
+export default function VisitorCard({ visitor, onSelect }) {
   if (!visitor) return null;
   const badgeStyle = TYPE_STYLES[visitor.visitor_type] || 'bg-clay-200 text-clay-700 border-clay-200';
 
@@ -23,6 +23,14 @@ export default function VisitorCard({ visitor }) {
         <p>Phone: {visitor.phone_number}</p>
         {visitor.code ? <p>Code: {visitor.code}</p> : <p>No code</p>}
       </div>
+      {onSelect && (
+        <button
+          className="self-start rounded-lg border border-clay-300 px-3 py-1 text-sm text-clay-700 hover:bg-clay-200"
+          onClick={() => onSelect(visitor)}
+        >
+          Use for check-in
+        </button>
+      )}
     </div>
   );
 }

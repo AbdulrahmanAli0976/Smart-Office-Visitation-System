@@ -12,6 +12,7 @@ export default function SearchBar({ value, onChange, onSubmit, loading, disabled
             value={value}
             onChange={(event) => onChange(event.target.value)}
             disabled={disabled}
+            autoFocus
           />
           {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
         </div>
