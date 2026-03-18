@@ -36,3 +36,8 @@ This log captures development actions and integrity checks performed on the syst
 - Verified INACTIVE officer enforcement: check-in blocked with 403.
 - Removed temporary verification script `backend/scripts/inactive-officer-check.js`.
 
+## 2026-03-18 12:41:04 +01:00
+- Added analytics summary endpoint `/api/reports/summary` with optional date range.
+- Added frontend analytics panel and toggle (today vs all-time).
+- Added inline UI validation for search and check-in fields.
+

@@ -6,6 +6,7 @@ import ActiveVisitors from './components/ActiveVisitors.jsx';
 import QuickActions from './components/QuickActions.jsx';
 import AuthPanel from './components/AuthPanel.jsx';
 import AdminPanel from './components/AdminPanel.jsx';
+import ReportsPanel from './components/ReportsPanel.jsx';
 
 const VISITOR_TYPES = [
   { value: 'BD', label: 'BD (Code required)' },
@@ -16,6 +17,10 @@ const VISITOR_TYPES = [
 
 const CODE_REQUIRED = new Set(['BD', 'MS', 'AGG']);
 const NO_CODE = new Set(['AGENT_MERCHANT']);
+
+function formatDateOnly(date) {
+  return date.toISOString().slice(0, 10);
+}
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem('vms_token') || '');
@@ -50,6 +55,12 @@ export default function App() {
     visitor_type: 'BD',
     code: ''
   });
+  const [fieldErrors, setFieldErrors] = useState({});
+  const [searchError, setSearchError] = useState('');
+
+  const [reportSummary, setReportSummary] = useState(null);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportRange, setReportRange] = useState('today');
 
   useEffect(() => {
     if (token) {
@@ -74,6 +85,7 @@ export default function App() {
     setAdminOfficers([]);
     setResults([]);
     setDuplicates([]);
+    setReportSummary(null);
     setMessage(note || 'Logged out.');
   };
 
@@ -111,9 +123,26 @@ export default function App() {
     }
   };
 
+  const refreshReport = async (authToken, range = reportRange) => {
+    setReportLoading(true);
+    try {
+      const today = formatDateOnly(new Date());
+      const params = range === 'today' ? { from: today, to: today } : {};
+      const data = await api.getSummaryReport(params, authToken);
+      setReportSummary(data);
+    } catch (err) {
+      if (!handleAuthFailure(err)) {
+        setError(err.message);
+      }
+    } finally {
+      setReportLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!token) return;
     refreshActiveVisits(token);
+    refreshReport(token);
   }, [token]);
 
   useEffect(() => {
@@ -156,13 +185,21 @@ export default function App() {
     event.preventDefault();
     setError('');
     setMessage('');
+
+    const trimmed = query.trim();
+    if (trimmed.length < 2) {
+      setSearchError('Enter at least 2 characters to search.');
+      return;
+    }
+
+    setSearchError('');
     setLoading(true);
     try {
       if (!token) {
         setError('Please log in to search visitors.');
         return;
       }
-      const data = await api.searchVisitors(query, token);
+      const data = await api.searchVisitors(trimmed, token);
       setResults(data);
     } catch (err) {
       if (!handleAuthFailure(err)) {
@@ -191,17 +228,28 @@ export default function App() {
   };
 
   const validateVisitorForm = () => {
-    if (!createNew) return null;
-    if (!visitorForm.full_name || !visitorForm.phone_number || !visitorForm.visitor_type) {
-      return 'Please complete the new visitor details.';
+    const errors = {};
+
+    if (!purpose.trim()) errors.purpose = 'Purpose is required.';
+    if (!personToSee.trim()) errors.personToSee = 'Person to see is required.';
+
+    if (!query.trim() && !createNew) {
+      errors.query = 'Search or enable create new visitor.';
     }
-    if (CODE_REQUIRED.has(visitorForm.visitor_type) && !visitorForm.code) {
-      return 'Code is required for this visitor type.';
+
+    if (createNew) {
+      if (!visitorForm.full_name.trim()) errors.full_name = 'Full name is required.';
+      if (!visitorForm.phone_number.trim()) errors.phone_number = 'Phone number is required.';
+      if (!visitorForm.visitor_type) errors.visitor_type = 'Visitor type is required.';
+      if (CODE_REQUIRED.has(visitorForm.visitor_type) && !visitorForm.code.trim()) {
+        errors.code = 'Code is required for this visitor type.';
+      }
+      if (NO_CODE.has(visitorForm.visitor_type) && visitorForm.code.trim()) {
+        errors.code = 'Agent/Merchant must not have a code.';
+      }
     }
-    if (NO_CODE.has(visitorForm.visitor_type) && visitorForm.code) {
-      return 'Agent/Merchant must not have a code.';
-    }
-    return null;
+
+    return errors;
   };
 
   const handleCheckIn = async () => {
@@ -214,33 +262,31 @@ export default function App() {
       return;
     }
 
-    if (!purpose || !personToSee) {
-      setError('Purpose and person to see are required.');
-      return;
-    }
+    const errors = validateVisitorForm();
+    setFieldErrors(errors);
 
-    if (!query && !createNew) {
-      setError('Search for a visitor or enable create new visitor.');
-      return;
-    }
-
-    const formError = validateVisitorForm();
-    if (formError) {
-      setError(formError);
+    if (Object.keys(errors).length > 0) {
+      setError('Please fix the highlighted fields.');
       return;
     }
 
     setActionLoading(true);
     try {
       const payload = {
-        query,
-        purpose,
-        person_to_see: personToSee,
-        visitor: createNew ? visitorForm : undefined
+        query: query.trim(),
+        purpose: purpose.trim(),
+        person_to_see: personToSee.trim(),
+        visitor: createNew ? {
+          ...visitorForm,
+          full_name: visitorForm.full_name.trim(),
+          phone_number: visitorForm.phone_number.trim(),
+          code: visitorForm.code.trim()
+        } : undefined
       };
 
       const response = await api.checkIn(payload, token);
       await refreshActiveVisits(token);
+      await refreshReport(token);
       setMessage('Visitor checked in successfully.');
       setDuplicates(response.duplicates || []);
     } catch (err) {
@@ -306,6 +352,14 @@ export default function App() {
     }
   };
 
+  const toggleReportRange = () => {
+    const next = reportRange === 'today' ? 'all' : 'today';
+    setReportRange(next);
+    if (token) {
+      refreshReport(token, next);
+    }
+  };
+
   const resultCards = useMemo(() => {
     if (!results.length) {
       return <p className="text-sm text-clay-600">No matches yet.</p>;
@@ -361,10 +415,14 @@ export default function App() {
           <>
             <SearchBar
               value={query}
-              onChange={setQuery}
+              onChange={(value) => {
+                setQuery(value);
+                if (searchError) setSearchError('');
+              }}
               onSubmit={handleSearch}
               loading={loading}
               disabled={!token}
+              error={searchError || fieldErrors.query}
             />
 
             {(error || message) && (
@@ -383,6 +441,13 @@ export default function App() {
                 </ul>
               </div>
             )}
+
+            <ReportsPanel
+              summary={reportSummary}
+              loading={reportLoading}
+              rangeLabel={reportRange === 'today' ? 'Today' : 'All time'}
+              onToggleRange={toggleReportRange}
+            />
 
             <section className="grid gap-6 lg:grid-cols-[2fr_1fr]">
               <div className="space-y-4">
@@ -407,18 +472,24 @@ export default function App() {
                 <div className="clay-card p-5 space-y-4">
                   <h3 className="text-lg font-semibold">Check-in Details</h3>
                   <div className="space-y-3">
-                    <input
-                      className="w-full rounded-xl border border-white/70 bg-white/70 px-4 py-2 text-sm shadow-inner"
-                      placeholder="Purpose of visit"
-                      value={purpose}
-                      onChange={(event) => setPurpose(event.target.value)}
-                    />
-                    <input
-                      className="w-full rounded-xl border border-white/70 bg-white/70 px-4 py-2 text-sm shadow-inner"
-                      placeholder="Person to see"
-                      value={personToSee}
-                      onChange={(event) => setPersonToSee(event.target.value)}
-                    />
+                    <div>
+                      <input
+                        className={`w-full rounded-xl border ${fieldErrors.purpose ? 'border-red-300 bg-red-50/70' : 'border-white/70 bg-white/70'} px-4 py-2 text-sm shadow-inner`}
+                        placeholder="Purpose of visit"
+                        value={purpose}
+                        onChange={(event) => setPurpose(event.target.value)}
+                      />
+                      {fieldErrors.purpose && <p className="mt-1 text-xs text-red-600">{fieldErrors.purpose}</p>}
+                    </div>
+                    <div>
+                      <input
+                        className={`w-full rounded-xl border ${fieldErrors.personToSee ? 'border-red-300 bg-red-50/70' : 'border-white/70 bg-white/70'} px-4 py-2 text-sm shadow-inner`}
+                        placeholder="Person to see"
+                        value={personToSee}
+                        onChange={(event) => setPersonToSee(event.target.value)}
+                      />
+                      {fieldErrors.personToSee && <p className="mt-1 text-xs text-red-600">{fieldErrors.personToSee}</p>}
+                    </div>
                   </div>
                   <label className="flex items-center gap-2 text-sm text-clay-700">
                     <input
@@ -430,33 +501,45 @@ export default function App() {
                   </label>
                   {createNew && (
                     <div className="space-y-3">
-                      <input
-                        className="w-full rounded-xl border border-white/70 bg-white/70 px-4 py-2 text-sm shadow-inner"
-                        placeholder="Full name"
-                        value={visitorForm.full_name}
-                        onChange={(event) => setVisitorForm((prev) => ({ ...prev, full_name: event.target.value }))}
-                      />
-                      <input
-                        className="w-full rounded-xl border border-white/70 bg-white/70 px-4 py-2 text-sm shadow-inner"
-                        placeholder="Phone number"
-                        value={visitorForm.phone_number}
-                        onChange={(event) => setVisitorForm((prev) => ({ ...prev, phone_number: event.target.value }))}
-                      />
-                      <select
-                        className="w-full rounded-xl border border-white/70 bg-white/70 px-4 py-2 text-sm shadow-inner"
-                        value={visitorForm.visitor_type}
-                        onChange={(event) => setVisitorForm((prev) => ({ ...prev, visitor_type: event.target.value, code: '' }))}
-                      >
-                        {VISITOR_TYPES.map((type) => (
-                          <option key={type.value} value={type.value}>{type.label}</option>
-                        ))}
-                      </select>
-                      <input
-                        className="w-full rounded-xl border border-white/70 bg-white/70 px-4 py-2 text-sm shadow-inner"
-                        placeholder="Visitor code (if required)"
-                        value={visitorForm.code}
-                        onChange={(event) => setVisitorForm((prev) => ({ ...prev, code: event.target.value }))}
-                      />
+                      <div>
+                        <input
+                          className={`w-full rounded-xl border ${fieldErrors.full_name ? 'border-red-300 bg-red-50/70' : 'border-white/70 bg-white/70'} px-4 py-2 text-sm shadow-inner`}
+                          placeholder="Full name"
+                          value={visitorForm.full_name}
+                          onChange={(event) => setVisitorForm((prev) => ({ ...prev, full_name: event.target.value }))}
+                        />
+                        {fieldErrors.full_name && <p className="mt-1 text-xs text-red-600">{fieldErrors.full_name}</p>}
+                      </div>
+                      <div>
+                        <input
+                          className={`w-full rounded-xl border ${fieldErrors.phone_number ? 'border-red-300 bg-red-50/70' : 'border-white/70 bg-white/70'} px-4 py-2 text-sm shadow-inner`}
+                          placeholder="Phone number"
+                          value={visitorForm.phone_number}
+                          onChange={(event) => setVisitorForm((prev) => ({ ...prev, phone_number: event.target.value }))}
+                        />
+                        {fieldErrors.phone_number && <p className="mt-1 text-xs text-red-600">{fieldErrors.phone_number}</p>}
+                      </div>
+                      <div>
+                        <select
+                          className={`w-full rounded-xl border ${fieldErrors.visitor_type ? 'border-red-300 bg-red-50/70' : 'border-white/70 bg-white/70'} px-4 py-2 text-sm shadow-inner`}
+                          value={visitorForm.visitor_type}
+                          onChange={(event) => setVisitorForm((prev) => ({ ...prev, visitor_type: event.target.value, code: '' }))}
+                        >
+                          {VISITOR_TYPES.map((type) => (
+                            <option key={type.value} value={type.value}>{type.label}</option>
+                          ))}
+                        </select>
+                        {fieldErrors.visitor_type && <p className="mt-1 text-xs text-red-600">{fieldErrors.visitor_type}</p>}
+                      </div>
+                      <div>
+                        <input
+                          className={`w-full rounded-xl border ${fieldErrors.code ? 'border-red-300 bg-red-50/70' : 'border-white/70 bg-white/70'} px-4 py-2 text-sm shadow-inner`}
+                          placeholder="Visitor code (if required)"
+                          value={visitorForm.code}
+                          onChange={(event) => setVisitorForm((prev) => ({ ...prev, code: event.target.value }))}
+                        />
+                        {fieldErrors.code && <p className="mt-1 text-xs text-red-600">{fieldErrors.code}</p>}
+                      </div>
                     </div>
                   )}
                   <button
