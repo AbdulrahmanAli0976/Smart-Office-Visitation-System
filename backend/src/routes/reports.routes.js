@@ -1,6 +1,6 @@
 import express from 'express';
 import { requireAuth } from '../middleware/auth.js';
-import { getSummary } from '../services/reportService.js';
+import { getSummary, getDashboardMetrics, getVisitorsPerDay, getVisitorTypeDistribution } from '../services/reportService.js';
 import { ok, fail } from '../utils/response.js';
 
 const router = express.Router();
@@ -19,6 +19,45 @@ router.get('/summary', requireAuth, async (req, res, next) => {
 
     const summary = await getSummary({ from, to });
     return ok(res, summary);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.get('/dashboard', requireAuth, async (req, res, next) => {
+  try {
+    const metrics = await getDashboardMetrics();
+    return ok(res, metrics);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.get('/visitors-per-day', requireAuth, async (req, res, next) => {
+  try {
+    const { from, to } = req.query || {};
+
+    if ((from && !isValidDate(from)) || (to && !isValidDate(to))) {
+      return fail(res, 'Invalid date format. Use YYYY-MM-DD.', 400);
+    }
+
+    const rows = await getVisitorsPerDay({ from, to });
+    return ok(res, rows);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.get('/visitor-types', requireAuth, async (req, res, next) => {
+  try {
+    const { from, to } = req.query || {};
+
+    if ((from && !isValidDate(from)) || (to && !isValidDate(to))) {
+      return fail(res, 'Invalid date format. Use YYYY-MM-DD.', 400);
+    }
+
+    const rows = await getVisitorTypeDistribution({ from, to });
+    return ok(res, rows);
   } catch (err) {
     return next(err);
   }

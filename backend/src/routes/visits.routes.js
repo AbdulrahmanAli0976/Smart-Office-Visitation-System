@@ -1,7 +1,7 @@
 import express from 'express';
 import { requireAuth, requireActiveOfficer } from '../middleware/auth.js';
 import { createVisitor, searchVisitors, findDuplicates } from '../services/visitorService.js';
-import { createVisitAtomic, completeVisit, listActiveVisits } from '../services/visitService.js';
+import { createVisitAtomic, completeVisit, listActiveVisits, listVisitHistory } from '../services/visitService.js';
 import { isNonEmptyString } from '../utils/validators.js';
 import { ok, fail } from '../utils/response.js';
 
@@ -9,6 +9,11 @@ const router = express.Router();
 
 const CODE_REQUIRED_TYPES = new Set(['BD', 'MS', 'AGG']);
 const NO_CODE_TYPES = new Set(['AGENT_MERCHANT']);
+const VISITOR_TYPES = new Set(['BD', 'MS', 'AGG', 'AGENT_MERCHANT']);
+
+function isValidDate(value) {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
 
 function validateVisitorInput(visitor) {
   if (!visitor) return 'Visitor data is required';
@@ -95,6 +100,121 @@ router.get('/active', requireAuth, async (req, res, next) => {
   try {
     const visits = await listActiveVisits();
     return ok(res, visits);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.get('/history', requireAuth, async (req, res, next) => {
+  try {
+    const { from, to, visitor_type, officer_id } = req.query || {};
+
+    if ((from && !isValidDate(from)) || (to && !isValidDate(to))) {
+      return fail(res, 'Invalid date format. Use YYYY-MM-DD.', 400);
+    }
+
+    if (visitor_type && !VISITOR_TYPES.has(visitor_type)) {
+      return fail(res, 'Invalid visitor type', 400);
+    }
+
+    let officerId = null;
+    if (officer_id) {
+      officerId = Number(officer_id);
+      if (!Number.isInteger(officerId)) {
+        return fail(res, 'Invalid officer id', 400);
+      }
+    }
+
+    const history = await listVisitHistory({
+      from,
+      to,
+      visitorType: visitor_type || null,
+      officerId
+    });
+
+    return ok(res, history);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.get('/export', requireAuth, async (req, res, next) => {
+  try {
+    const { from, to, visitor_type, officer_id, format } = req.query || {};
+
+    if ((from && !isValidDate(from)) || (to && !isValidDate(to))) {
+      return fail(res, 'Invalid date format. Use YYYY-MM-DD.', 400);
+    }
+
+    if (visitor_type && !VISITOR_TYPES.has(visitor_type)) {
+      return fail(res, 'Invalid visitor type', 400);
+    }
+
+    let officerId = null;
+    if (officer_id) {
+      officerId = Number(officer_id);
+      if (!Number.isInteger(officerId)) {
+        return fail(res, 'Invalid officer id', 400);
+      }
+    }
+
+    const history = await listVisitHistory({
+      from,
+      to,
+      visitorType: visitor_type || null,
+      officerId
+    });
+
+    const columns = [
+      'visit_id',
+      'status',
+      'time_in',
+      'time_out',
+      'purpose',
+      'person_to_see',
+      'visitor_id',
+      'visitor_name',
+      'visitor_phone',
+      'visitor_type',
+      'visitor_code',
+      'officer_id',
+      'officer_name'
+    ];
+
+    const escapeCsv = (value) => {
+      if (value === null || value === undefined) return '';
+      const str = String(value);
+      if (/[",\n]/.test(str)) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+
+    const rows = history.map((row) => [
+      row.visit_id,
+      row.status,
+      row.time_in,
+      row.time_out,
+      row.purpose,
+      row.person_to_see,
+      row.visitor_id,
+      row.full_name,
+      row.phone_number,
+      row.visitor_type,
+      row.code,
+      row.officer_id,
+      row.officer_name
+    ]);
+
+    const csv = [columns.join(','), ...rows.map((row) => row.map(escapeCsv).join(','))].join('\n');
+
+    if (format === 'csv') {
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', 'attachment; filename="visits_export.csv"');
+      return res.status(200).send(csv);
+    }
+
+    return ok(res, { csv });
   } catch (err) {
     return next(err);
   }
