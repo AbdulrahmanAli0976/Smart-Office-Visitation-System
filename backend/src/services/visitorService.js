@@ -36,6 +36,8 @@ export async function searchVisitors(query, limit = 20) {
   const phoneLike = `%${sanitizeLike(normalizedPhone)}%`;
   const nameLike = `%${sanitizeLike(q)}%`;
 
+  const safeLimit = Math.max(1, Math.min(parseInt(limit, 10) || 20, 50));
+
   return db.query(
     `SELECT id, full_name, phone_number, visitor_type, code,
             CASE
@@ -49,8 +51,8 @@ export async function searchVisitors(query, limit = 20) {
      WHERE deleted_at IS NULL
        AND (code = ? OR phone_number = ? OR phone_number LIKE ? OR full_name LIKE ?)
      ORDER BY priority ASC, full_name ASC
-     LIMIT ?`,
-    [q, normalizedPhone, phoneLike, nameLike, q, normalizedPhone, phoneLike, nameLike, limit]
+     LIMIT ${safeLimit}`,
+    [q, normalizedPhone, phoneLike, nameLike, q, normalizedPhone, phoneLike, nameLike]
   );
 }
 
