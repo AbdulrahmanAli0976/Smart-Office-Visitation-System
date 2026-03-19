@@ -24,6 +24,12 @@ Production-ready Visitor Management System with role-based access, smart search,
      - `npm install`
      - `npm run dev`
 
+## Docker Quick Start
+1. Copy `.env.docker.example` to `.env` and update values.
+2. Run `docker compose up -d --build`.
+3. Open `http://localhost:8080`.
+4. Stop with `docker compose down`.
+
 ## Notes
 - Officers register via `/api/auth/register` and must be approved by admin.
 - Only ACTIVE officers can log in and use the system.

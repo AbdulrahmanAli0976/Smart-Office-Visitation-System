@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: visitor_management
+          MYSQL_USER: vms_user
+          MYSQL_PASSWORD: vms_pass
+          MYSQL_ROOT_PASSWORD: root_pass
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root -proot_pass"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+
+      - name: Install mysql client
+        run: sudo apt-get update && sudo apt-get install -y mysql-client
+
+      - name: Backend install
+        working-directory: backend
+        run: npm ci --omit=dev
+
+      - name: Apply schema
+        run: |
+          until mysqladmin ping -h 127.0.0.1 -u root -proot_pass --silent; do sleep 2; done
+          mysql -h 127.0.0.1 -u root -proot_pass < database/schema.sql
+
+      - name: Backend tests
+        working-directory: backend
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_USER: vms_user
+          DB_PASSWORD: vms_pass
+          DB_NAME: visitor_management
+          JWT_SECRET: ci-secret
+          NODE_ENV: test
+        run: |
+          node scripts/integrity-check.js
+          node scripts/phase4-tests.js
+          node scripts/phase7-tests.js
+
+      - name: Frontend install
+        working-directory: frontend
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+
+      - name: Frontend build
+        working-directory: frontend
+        run: npm run build
