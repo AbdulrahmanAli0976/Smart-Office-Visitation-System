@@ -4,6 +4,7 @@ import { createVisitor, searchVisitors, findDuplicates } from '../services/visit
 import { createVisitAtomic, completeVisit, listActiveVisits, listVisitHistory } from '../services/visitService.js';
 import { isNonEmptyString } from '../utils/validators.js';
 import { ok, fail } from '../utils/response.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -36,10 +37,21 @@ function validateVisitorInput(visitor) {
 
 router.post('/checkin', requireAuth, requireActiveOfficer, async (req, res, next) => {
   try {
-    const { query, visitor, purpose, person_to_see } = req.body || {};
+    const body = req.body || {};
+    const { query, visitor, purpose, person_to_see } = body;
 
     if (!isNonEmptyString(purpose) || !isNonEmptyString(person_to_see)) {
       return fail(res, 'Purpose and person to see are required', 400);
+    }
+
+    const hasQuery = Object.prototype.hasOwnProperty.call(body, 'query');
+    if (hasQuery && (query === null || query === undefined)) {
+      logger.warn('visits.checkin_invalid_query', { query });
+      return fail(res, 'Query cannot be null', 400);
+    }
+    if (hasQuery && query !== null && query !== undefined && typeof query !== 'string') {
+      logger.warn('visits.checkin_invalid_query', { query });
+      return fail(res, 'Query must be a string', 400);
     }
 
     let selectedVisitor = null;
@@ -72,9 +84,21 @@ router.post('/checkin', requireAuth, requireActiveOfficer, async (req, res, next
       selectedVisitor = { id: visitorId };
     }
 
+    const visitorId = parseInt(selectedVisitor?.id, 10);
+    if (!Number.isInteger(visitorId)) {
+      logger.warn('visits.checkin_invalid_visitor', { visitorId: selectedVisitor?.id });
+      return fail(res, 'Invalid visitor id', 400);
+    }
+
+    const officerId = parseInt(req.user?.id, 10);
+    if (!Number.isInteger(officerId)) {
+      logger.warn('visits.checkin_invalid_officer', { officerId: req.user?.id });
+      return fail(res, 'Invalid officer id', 400);
+    }
+
     const result = await createVisitAtomic({
-      visitorId: selectedVisitor.id,
-      officerId: req.user.id,
+      visitorId,
+      officerId,
       purpose: purpose.trim(),
       personToSee: person_to_see.trim()
     });
@@ -85,7 +109,7 @@ router.post('/checkin', requireAuth, requireActiveOfficer, async (req, res, next
 
     return ok(res, {
       visit_id: result.visitId,
-      visitor_id: selectedVisitor.id,
+      visitor_id: visitorId,
       duplicates
     }, 201);
   } catch (err) {
@@ -119,7 +143,7 @@ router.get('/history', requireAuth, async (req, res, next) => {
 
     let officerId = null;
     if (officer_id) {
-      officerId = Number(officer_id);
+      officerId = parseInt(officer_id, 10);
       if (!Number.isInteger(officerId)) {
         return fail(res, 'Invalid officer id', 400);
       }
@@ -152,7 +176,7 @@ router.get('/export', requireAuth, async (req, res, next) => {
 
     let officerId = null;
     if (officer_id) {
-      officerId = Number(officer_id);
+      officerId = parseInt(officer_id, 10);
       if (!Number.isInteger(officerId)) {
         return fail(res, 'Invalid officer id', 400);
       }
@@ -222,7 +246,16 @@ router.get('/export', requireAuth, async (req, res, next) => {
 
 router.put('/:id/checkout', requireAuth, requireActiveOfficer, async (req, res, next) => {
   try {
-    const updated = await completeVisit(req.params.id);
+    const rawId = req.params?.id;
+    logger.info('visits.checkout_request', { id: rawId, userId: req.user?.id });
+
+    const visitId = parseInt(rawId, 10);
+    if (!Number.isInteger(visitId)) {
+      logger.warn('visits.checkout_invalid_id', { id: rawId });
+      return fail(res, 'Invalid visit id', 400);
+    }
+
+    const updated = await completeVisit(visitId);
     if (!updated) {
       return fail(res, 'Active visit not found', 404);
     }
