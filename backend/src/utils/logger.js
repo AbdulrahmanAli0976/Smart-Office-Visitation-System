@@ -14,10 +14,14 @@ const errorLogPath = path.join(logsDir, 'error.log');
 const appStream = fs.createWriteStream(appLogPath, { flags: 'a' });
 const errorStream = fs.createWriteStream(errorLogPath, { flags: 'a' });
 
-function formatLine(level, message, meta) {
-  const timestamp = new Date().toISOString();
-  const payload = meta ? ` ${JSON.stringify(meta)}` : '';
-  return `[${timestamp}] ${level.toUpperCase()} ${message}${payload}`;
+function formatJson(level, event, meta) {
+  const payload = {
+    timestamp: new Date().toISOString(),
+    level: level.toUpperCase(),
+    event,
+    ...meta
+  };
+  return JSON.stringify(payload);
 }
 
 function writeLine(stream, line) {
@@ -25,18 +29,18 @@ function writeLine(stream, line) {
 }
 
 export const logger = {
-  info(message, meta) {
-    const line = formatLine('info', message, meta);
+  info(event, meta) {
+    const line = formatJson('info', event, meta);
     console.log(line);
     writeLine(appStream, line);
   },
-  warn(message, meta) {
-    const line = formatLine('warn', message, meta);
+  warn(event, meta) {
+    const line = formatJson('warn', event, meta);
     console.warn(line);
     writeLine(appStream, line);
   },
-  error(message, meta) {
-    const line = formatLine('error', message, meta);
+  error(event, meta) {
+    const line = formatJson('error', event, meta);
     console.error(line);
     writeLine(errorStream, line);
   }
@@ -44,6 +48,9 @@ export const logger = {
 
 export const httpLogStream = {
   write(message) {
+    // Morgan logs often end with \n, strip it for consistent JSON if needed
+    // But morgan combined format is not JSON. 
+    // For pure production hardening, we could use morgan-json
     appStream.write(message);
   }
 };

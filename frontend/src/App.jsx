@@ -11,6 +11,7 @@ import DashboardMetrics from './components/DashboardMetrics.jsx';
 import AnalyticsCharts from './components/AnalyticsCharts.jsx';
 import VisitHistoryPanel from './components/VisitHistoryPanel.jsx';
 import VisitorHistoryPanel from './components/VisitorHistoryPanel.jsx';
+import BulkCheckInPanel from './components/BulkCheckInPanel.jsx';
 
 const VISITOR_TYPES = [
   { value: 'BD', label: 'BD (Code required)' },
@@ -21,6 +22,28 @@ const VISITOR_TYPES = [
 
 const CODE_REQUIRED = new Set(['BD', 'MS', 'AGG']);
 const NO_CODE = new Set(['AGENT_MERCHANT']);
+
+function normalizeRole(role) {
+  return typeof role === 'string' ? role.trim().toUpperCase() : '';
+}
+
+function normalizeStatus(status) {
+  return typeof status === 'string' ? status.trim().toUpperCase() : '';
+}
+
+function normalizeUser(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const role = normalizeRole(raw.role);
+  if (!role) return null;
+  const status = normalizeStatus(raw.status);
+  const parsedId = Number.isInteger(raw.id) ? raw.id : parseInt(raw.id, 10);
+  return {
+    ...raw,
+    id: Number.isInteger(parsedId) ? parsedId : raw.id,
+    role,
+    status
+  };
+}
 
 function formatDateOnly(date) {
   return date.toISOString().slice(0, 10);
@@ -38,11 +61,14 @@ export default function App() {
     const raw = localStorage.getItem('vms_user');
     if (!raw) return null;
     try {
-      return JSON.parse(raw);
+      return normalizeUser(JSON.parse(raw));
     } catch (err) {
       return null;
     }
   });
+  const isAdmin = user?.role === 'ADMIN';
+  const canManageVisits = user?.role === 'ADMIN' || user?.role === 'OFFICER';
+
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
   const [activeVisits, setActiveVisits] = useState([]);
@@ -55,6 +81,27 @@ export default function App() {
   const [adminOfficers, setAdminOfficers] = useState([]);
   const [adminLoading, setAdminLoading] = useState(false);
   const [duplicates, setDuplicates] = useState([]);
+  const [bulkSummary, setBulkSummary] = useState(null);
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkError, setBulkError] = useState('');
+
+  const [visitorPage, setVisitorPage] = useState(1);
+  const [visitorLimit] = useState(10);
+  const [visitorTotalPages, setVisitorTotalPages] = useState(1);
+  const [visitorTotal, setVisitorTotal] = useState(0);
+  const [visitorSearch, setVisitorSearch] = useState('');
+
+  const [officerPage, setOfficerPage] = useState(1);
+  const [officerLimit] = useState(10);
+  const [officerTotalPages, setOfficerTotalPages] = useState(1);
+  const [officerTotal, setOfficerTotal] = useState(0);
+  const [officerSearch, setOfficerSearch] = useState('');
+  const [officerStatus, setOfficerStatus] = useState('');
+
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyLimit] = useState(10);
+  const [historyTotalPages, setHistoryTotalPages] = useState(1);
+  const [historyTotal, setHistoryTotal] = useState(0);
 
   const [purpose, setPurpose] = useState('');
   const [personToSee, setPersonToSee] = useState('');
@@ -77,12 +124,18 @@ export default function App() {
   const [perDay, setPerDay] = useState([]);
   const [typeDistribution, setTypeDistribution] = useState([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsRange, setAnalyticsRange] = useState({
+    from: daysAgo(6),
+    to: formatDateOnly(new Date())
+  });
 
   const [historyFilters, setHistoryFilters] = useState({
     from: daysAgo(7),
     to: formatDateOnly(new Date()),
     visitor_type: '',
-    officer_id: ''
+    officer_id: '',
+    status: '',
+    search: ''
   });
   const [visitHistory, setVisitHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -105,7 +158,7 @@ export default function App() {
     } else {
       localStorage.removeItem('vms_user');
     }
-  }, [user]);
+  }, [user, isAdmin]);
 
   const logout = (note) => {
     setToken('');
@@ -114,6 +167,9 @@ export default function App() {
     setAdminOfficers([]);
     setResults([]);
     setDuplicates([]);
+    setBulkSummary(null);
+    setBulkError('');
+    setBulkLoading(false);
     setReportSummary(null);
     setDashboardMetrics(null);
     setPerDay([]);
@@ -138,6 +194,31 @@ export default function App() {
     return false;
   };
 
+  const fetchVisitors = async ({ page = visitorPage, search = visitorSearch } = {}) => {
+    if (!token) {
+      setError('Please log in to search visitors.');
+      return;
+    }
+    setLoading(true);
+    try {
+      const { data, pagination } = await api.listVisitors({
+        search,
+        page,
+        limit: visitorLimit
+      }, token);
+      setResults(data);
+      setVisitorPage(pagination.page || page);
+      setVisitorTotalPages(pagination.totalPages || 1);
+      setVisitorTotal(pagination.total || data.length);
+    } catch (err) {
+      if (!handleAuthFailure(err)) {
+        setError(err.message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const refreshActiveVisits = async (authToken) => {
     try {
       const data = await api.getActiveVisits(authToken);
@@ -149,12 +230,23 @@ export default function App() {
     }
   };
 
-  const refreshOfficers = async (authToken) => {
-    if (!user || user.role !== 'ADMIN') return;
+  const refreshOfficers = async (authToken, overrides = {}) => {
+    if (!user || !isAdmin) return;
     setAdminLoading(true);
     try {
-      const data = await api.getOfficers(authToken);
+      const page = overrides.page ?? officerPage;
+      const search = overrides.search ?? officerSearch;
+      const status = overrides.status ?? officerStatus;
+      const { data, pagination } = await api.getOfficers({
+        page,
+        limit: officerLimit,
+        search,
+        status
+      }, authToken);
       setAdminOfficers(data);
+      setOfficerPage(pagination.page || page);
+      setOfficerTotalPages(pagination.totalPages || 1);
+      setOfficerTotal(pagination.total || data.length);
     } catch (err) {
       if (!handleAuthFailure(err)) {
         setError(err.message);
@@ -194,10 +286,9 @@ export default function App() {
     }
   };
 
-  const refreshAnalytics = async (authToken) => {
+  const refreshAnalytics = async (authToken, range = analyticsRange) => {
     setAnalyticsLoading(true);
     try {
-      const range = { from: daysAgo(6), to: formatDateOnly(new Date()) };
       const perDayData = await api.getVisitorsPerDay(range, authToken);
       const typeData = await api.getVisitorTypeDistribution(range, authToken);
       setPerDay(perDayData);
@@ -211,15 +302,20 @@ export default function App() {
     }
   };
 
-  const refreshVisitHistory = async (authToken, filters = historyFilters) => {
+  const refreshVisitHistory = async (authToken, filters = historyFilters, pageOverride = historyPage) => {
     setHistoryLoading(true);
     try {
       const params = { ...filters };
-      if (user && user.role !== 'ADMIN') {
+      if (user && !isAdmin) {
         params.officer_id = user.id;
       }
-      const data = await api.getVisitHistory(params, authToken);
+      params.page = pageOverride;
+      params.limit = historyLimit;
+      const { data, pagination } = await api.getVisitHistory(params, authToken);
       setVisitHistory(data);
+      setHistoryPage(pagination.page || pageOverride);
+      setHistoryTotalPages(pagination.totalPages || 1);
+      setHistoryTotal(pagination.total || data.length);
     } catch (err) {
       if (!handleAuthFailure(err)) {
         setError(err.message);
@@ -234,14 +330,14 @@ export default function App() {
     refreshActiveVisits(token);
     refreshReport(token);
     refreshDashboard(token);
-    refreshAnalytics(token);
-    refreshVisitHistory(token);
+    refreshAnalytics(token, analyticsRange);
+    refreshVisitHistory(token, historyFilters, historyPage);
   }, [token]);
 
   useEffect(() => {
-    if (!token || !user || user.role !== 'ADMIN') return;
+    if (!token || !user || !isAdmin) return;
     refreshOfficers(token);
-  }, [token, user]);
+  }, [token, user, officerPage, officerSearch, officerStatus]);
 
   useEffect(() => {
     if (!token) return undefined;
@@ -253,10 +349,10 @@ export default function App() {
 
   useEffect(() => {
     if (!user) return;
-    if (user.role !== 'ADMIN') {
+    if (!isAdmin) {
       setHistoryFilters((prev) => ({ ...prev, officer_id: user.id }));
     }
-  }, [user]);
+  }, [user, isAdmin]);
 
   const handleLogin = async (payload) => {
     setAuthError('');
@@ -264,8 +360,17 @@ export default function App() {
     setLoading(true);
     try {
       const data = await api.login(payload);
+      const normalized = normalizeUser(data.user);
+      if (!normalized || !normalized.role) {
+        setAuthError('Account role is missing. Contact admin.');
+        return;
+      }
+      if (normalized.role === 'OFFICER' && normalized.status !== 'ACTIVE') {
+        setAuthError('Account not active. Await approval or contact admin.');
+        return;
+      }
       setToken(data.token);
-      setUser(data.user);
+      setUser(normalized);
       setAuthMessage('Login successful.');
       setMessage('');
     } catch (err) {
@@ -301,26 +406,60 @@ export default function App() {
     }
 
     setSearchError('');
-    setLoading(true);
-    try {
-      if (!token) {
-        setError('Please log in to search visitors.');
-        return;
-      }
-      const data = await api.searchVisitors(trimmed, token);
-      setResults(data);
-    } catch (err) {
-      if (!handleAuthFailure(err)) {
-        setError(err.message);
-      }
-    } finally {
-      setLoading(false);
+    if (!token) {
+      setError('Please log in to search visitors.');
+      return;
     }
+    setVisitorSearch(trimmed);
+    setVisitorPage(1);
+    await fetchVisitors({ page: 1, search: trimmed });
+  };
+
+  const handleVisitorPageChange = (nextPage) => {
+    if (!visitorTotalPages) return;
+    const page = Math.max(1, Math.min(nextPage, visitorTotalPages));
+    setVisitorPage(page);
+    fetchVisitors({ page, search: visitorSearch });
+  };
+
+  const handleHistoryApply = () => {
+    if (!token) return;
+    setHistoryPage(1);
+    refreshVisitHistory(token, historyFilters, 1);
+  };
+
+  const handleHistoryPageChange = (nextPage) => {
+    if (!token || !historyTotalPages) return;
+    const page = Math.max(1, Math.min(nextPage, historyTotalPages));
+    setHistoryPage(page);
+    refreshVisitHistory(token, historyFilters, page);
+  };
+
+  const handleOfficerSearch = (value) => {
+    setOfficerSearch(value);
+    setOfficerPage(1);
+  };
+
+  const handleOfficerStatus = (value) => {
+    setOfficerStatus(value);
+    setOfficerPage(1);
+  };
+
+  const handleOfficerPageChange = (nextPage) => {
+    if (!officerTotalPages) return;
+    const page = Math.max(1, Math.min(nextPage, officerTotalPages));
+    setOfficerPage(page);
   };
 
   const handleCheckout = async (visitId) => {
     setError('');
     setMessage('');
+
+    if (!canManageVisits) {
+      setError('Your role cannot manage visits.');
+      return;
+    }
+
     setActionLoading(true);
     try {
       await api.checkOut(visitId, token);
@@ -372,6 +511,11 @@ export default function App() {
       return;
     }
 
+    if (!canManageVisits) {
+      setError('Your role cannot manage visits.');
+      return;
+    }
+
     const errors = validateVisitorForm();
     setFieldErrors(errors);
 
@@ -406,6 +550,43 @@ export default function App() {
       }
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const clearBulkStatus = () => {
+    setBulkSummary(null);
+    setBulkError('');
+  };
+
+  const handleBulkCheckIn = async (rows) => {
+    setBulkError('');
+    setBulkSummary(null);
+
+    if (!token) {
+      setBulkError('Please log in to use bulk check-in.');
+      return;
+    }
+
+    if (!canManageVisits) {
+      setBulkError('Your role cannot manage visits.');
+      return;
+    }
+
+    setBulkLoading(true);
+    try {
+      const summary = await api.bulkCheckIn({ visitors: rows }, token);
+      setBulkSummary(summary);
+      await refreshActiveVisits(token);
+      await refreshReport(token);
+      await refreshDashboard(token);
+      await refreshAnalytics(token, analyticsRange);
+      setMessage('Bulk check-in completed.');
+    } catch (err) {
+      if (!handleAuthFailure(err)) {
+        setBulkError(err.message);
+      }
+    } finally {
+      setBulkLoading(false);
     }
   };
 
@@ -471,6 +652,11 @@ export default function App() {
     }
   };
 
+  const handleAnalyticsApply = () => {
+    if (!token) return;
+    refreshAnalytics(token, analyticsRange);
+  };
+
   const handleSelectVisitor = (visitor) => {
     const pick = visitor.code || visitor.phone_number || visitor.full_name;
     setQuery(pick || '');
@@ -504,7 +690,7 @@ export default function App() {
     if (!token) return;
     try {
       const params = { ...historyFilters };
-      if (user && user.role !== 'ADMIN') {
+      if (user && !isAdmin) {
         params.officer_id = user.id;
       }
       const csv = await api.exportVisits(params, token);
@@ -524,6 +710,8 @@ export default function App() {
       }
     }
   };
+
+  const recentActivity = useMemo(() => visitHistory.slice(0, 5), [visitHistory]);
 
   const resultCards = useMemo(() => {
     if (!results.length) {
@@ -621,7 +809,15 @@ export default function App() {
               onToggleRange={toggleReportRange}
             />
 
-            <AnalyticsCharts perDay={perDay} typeDistribution={typeDistribution} loading={analyticsLoading} />
+            <AnalyticsCharts
+              perDay={perDay}
+              typeDistribution={typeDistribution}
+              loading={analyticsLoading}
+              range={analyticsRange}
+              onRangeChange={setAnalyticsRange}
+              onApplyRange={handleAnalyticsApply}
+              recentActivity={recentActivity}
+            />
 
             <section className="grid gap-6 lg:grid-cols-[2fr_1fr]">
               <div className="space-y-4">
@@ -635,12 +831,33 @@ export default function App() {
                   </button>
                 </div>
                 {resultCards}
+                {results.length > 0 && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-clay-600">
+                    <span>Page {visitorPage} of {visitorTotalPages} ? Showing {results.length} of {visitorTotal}</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        className="rounded-lg border border-clay-300 px-3 py-1 text-xs text-clay-700 disabled:opacity-60"
+                        onClick={() => handleVisitorPageChange(visitorPage - 1)}
+                        disabled={visitorPage <= 1}
+                      >
+                        Previous
+                      </button>
+                      <button
+                        className="rounded-lg border border-clay-300 px-3 py-1 text-xs text-clay-700 disabled:opacity-60"
+                        onClick={() => handleVisitorPageChange(visitorPage + 1)}
+                        disabled={visitorPage >= visitorTotalPages}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="space-y-4">
                 <QuickActions
                   onAddVisitor={handleAddVisitor}
                   onCheckIn={handleCheckIn}
-                  disabled={actionLoading}
+                  disabled={actionLoading || !canManageVisits}
                   loading={actionLoading}
                 />
                 <div className="clay-card p-5 space-y-4">
@@ -719,25 +936,38 @@ export default function App() {
                   <button
                     className="w-full rounded-xl bg-clay-800 text-white py-3 shadow-clay disabled:opacity-60"
                     onClick={handleCheckIn}
-                    disabled={actionLoading}
+                    disabled={actionLoading || !canManageVisits}
                   >
                     {actionLoading ? 'Processing...' : 'Confirm Check-in'}
                   </button>
                 </div>
+                <BulkCheckInPanel
+                  onSubmit={handleBulkCheckIn}
+                  loading={bulkLoading}
+                  summary={bulkSummary}
+                  error={bulkError}
+                  disabled={bulkLoading || !canManageVisits}
+                  onReset={clearBulkStatus}
+                />
               </div>
             </section>
 
-            <ActiveVisitors visits={activeVisits} onCheckout={handleCheckout} loading={actionLoading} />
+            <ActiveVisitors visits={activeVisits} onCheckout={handleCheckout} loading={actionLoading} canManage={canManageVisits} />
 
             <VisitHistoryPanel
               filters={historyFilters}
               onChange={setHistoryFilters}
-              onApply={() => refreshVisitHistory(token)}
+              onApply={handleHistoryApply}
               onExport={handleExport}
               visits={visitHistory}
               loading={historyLoading}
               officers={adminOfficers}
-              isAdmin={user.role === 'ADMIN'}
+              isAdmin={isAdmin}
+              page={historyPage}
+              totalPages={historyTotalPages}
+              total={historyTotal}
+              onPrev={() => handleHistoryPageChange(historyPage - 1)}
+              onNext={() => handleHistoryPageChange(historyPage + 1)}
             />
 
             {visitorHistoryLoading && (
@@ -752,13 +982,22 @@ export default function App() {
               />
             )}
 
-            {user.role === 'ADMIN' && (
+            {isAdmin && (
               <AdminPanel
                 officers={adminOfficers}
                 onApprove={handleApprove}
                 onDeactivate={handleDeactivate}
                 onDelete={handleDelete}
                 loading={adminLoading}
+                search={officerSearch}
+                status={officerStatus}
+                page={officerPage}
+                totalPages={officerTotalPages}
+                total={officerTotal}
+                onSearchChange={handleOfficerSearch}
+                onStatusChange={handleOfficerStatus}
+                onPrev={() => handleOfficerPageChange(officerPage - 1)}
+                onNext={() => handleOfficerPageChange(officerPage + 1)}
               />
             )}
           </>

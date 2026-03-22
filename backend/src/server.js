@@ -12,9 +12,29 @@ async function start() {
     console.error('Database connection failed:', err.message);
   }
 
-  app.listen(env.port, () => {
+  const server = app.listen(env.port, () => {
     console.log(`API listening on port ${env.port}`);
   });
+
+  const shutdown = async (signal) => {
+    console.log(`Received ${signal}. Starting graceful shutdown...`);
+    
+    server.close(() => {
+      console.log('HTTP server closed.');
+    });
+
+    try {
+      await db.pool.end();
+      console.log('Database pool closed.');
+      process.exit(0);
+    } catch (err) {
+      console.error('Error during database pool closure:', err.message);
+      process.exit(1);
+    }
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 start();

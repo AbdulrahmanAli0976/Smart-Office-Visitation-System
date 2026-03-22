@@ -7,7 +7,7 @@ const TYPE_COLORS = {
   AGENT_MERCHANT: 'bg-gray-500'
 };
 
-export default function ActiveVisitors({ visits, onCheckout, loading }) {
+export default function ActiveVisitors({ visits, onCheckout, loading, canManage = true }) {
   return (
     <div className="clay-card p-5">
       <div className="flex items-center justify-between mb-4">
@@ -25,7 +25,7 @@ export default function ActiveVisitors({ visits, onCheckout, loading }) {
               <div>
                 <p className="font-medium text-clay-900">{visit.full_name}</p>
                 <p className="text-xs text-clay-600">
-                  {visit.visitor_type?.replace('_', ' ')} · Checked in {new Date(visit.time_in).toLocaleTimeString()}
+                  {visit.visitor_type?.replace('_', ' ')} Â· Checked in {new Date(visit.time_in).toLocaleTimeString()}
                 </p>
                 <p className="text-xs text-clay-600">Officer: {visit.officer_name}</p>
               </div>
@@ -33,7 +33,7 @@ export default function ActiveVisitors({ visits, onCheckout, loading }) {
             <button
               className="self-start rounded-lg border border-clay-300 px-3 py-1 text-sm text-clay-700 hover:bg-clay-200 disabled:opacity-60 md:self-auto"
               onClick={() => onCheckout(visit.visit_id)}
-              disabled={loading}
+              disabled={loading || !canManage}
             >
               Check-out
             </button>

@@ -56,6 +56,47 @@ export async function searchVisitors(query, limit = 20) {
   );
 }
 
+export async function listVisitorsPaged({ search = '', status = 'ACTIVE', visitorType = null, limit = 10, offset = 0 }) {
+  const conn = await db.pool.getConnection();
+  try {
+    const filters = [];
+    const params = [];
+
+    const normalizedStatus = String(status || '').trim().toUpperCase();
+    if (!normalizedStatus || normalizedStatus === 'ACTIVE') {
+      filters.push('deleted_at IS NULL');
+    } else if (normalizedStatus === 'DELETED') {
+      filters.push('deleted_at IS NOT NULL');
+    }
+
+    if (visitorType) {
+      filters.push('visitor_type = ?');
+      params.push(visitorType);
+    }
+
+    const trimmed = String(search || '').trim();
+    if (trimmed) {
+      const term = `%${sanitizeLike(trimmed)}%`;
+      filters.push('(full_name LIKE ? OR phone_number LIKE ? OR code LIKE ?)');
+      params.push(term, term, term);
+    }
+
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const sql = `SELECT SQL_CALC_FOUND_ROWS id, full_name, phone_number, visitor_type, code, deleted_at, created_at, updated_at
+     FROM visitors
+     ${where}
+     ORDER BY created_at DESC
+     LIMIT ${limit} OFFSET ${offset}`;
+
+    const [rows] = await conn.execute(sql, params);
+    const [totals] = await conn.execute('SELECT FOUND_ROWS() as total');
+    const total = totals[0]?.total ?? 0;
+    return { rows, total };
+  } finally {
+    conn.release();
+  }
+}
+
 export async function findDuplicates({ fullName, phoneNumber, excludeId = null }) {
   const phone = normalizePhone(phoneNumber);
   const nameLike = `%${sanitizeLike(fullName)}%`;

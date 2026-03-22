@@ -75,13 +75,21 @@ export async function getDashboardMetrics() {
      LIMIT 1`
   );
 
+  const pendingRows = await db.query(
+    `SELECT COUNT(*) AS pending_officers
+     FROM users
+     WHERE role = 'OFFICER' AND status = 'PENDING'`
+  );
+
   const metrics = rows[0] || {};
   const peak = peakRows[0] || null;
+  const pending = pendingRows[0] || {};
 
   return {
     visitors_today: Number(metrics.visitors_today || 0),
     active_visitors_now: Number(metrics.active_visitors_now || 0),
     completed_today: Number(metrics.completed_today || 0),
+    pending_officers: Number(pending.pending_officers || 0),
     peak_visit_hour: peak ? { hour: Number(peak.hour_bucket), visits: Number(peak.total) } : null
   };
 }

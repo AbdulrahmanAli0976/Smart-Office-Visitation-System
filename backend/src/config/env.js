@@ -31,18 +31,31 @@ const corsOrigins = corsOriginRaw
 
 const corsOrigin = corsOrigins.length > 1 ? corsOrigins : corsOrigins[0] || '*';
 
+const jwtSecret = process.env.JWT_SECRET;
+if (!jwtSecret || !String(jwtSecret).trim()) {
+  throw new Error('FATAL: JWT_SECRET is required but missing from .env');
+}
+
+const dbHost = process.env.DB_HOST || 'localhost';
+const dbUser = process.env.DB_USER || 'root';
+const dbName = process.env.DB_NAME || 'visitor_management';
+
+if (!process.env.DB_NAME) {
+  console.warn('WARNING: DB_NAME not set, defaulting to visitor_management');
+}
+
 export const env = {
   nodeEnv,
   port: Number(process.env.PORT || 4000),
   db: {
-    host: process.env.DB_HOST || 'localhost',
+    host: dbHost,
     port: Number(process.env.DB_PORT || 3306),
-    user: process.env.DB_USER || 'root',
+    user: dbUser,
     password: process.env.DB_PASSWORD || '',
-    name: process.env.DB_NAME || 'visitor_management'
+    name: dbName
   },
   jwt: {
-    secret: process.env.JWT_SECRET || 'change-me',
+    secret: String(jwtSecret),
     expiresIn: process.env.JWT_EXPIRES_IN || '8h'
   },
   corsOrigin,
@@ -53,9 +66,3 @@ export const env = {
   logLevel: process.env.LOG_LEVEL || 'info',
   httpLogFormat: process.env.HTTP_LOG_FORMAT || (nodeEnv === 'production' ? 'combined' : 'dev')
 };
-
-if (env.nodeEnv === 'production') {
-  if (!process.env.JWT_SECRET || env.jwt.secret === 'change-me') {
-    throw new Error('JWT_SECRET must be set for production');
-  }
-}
