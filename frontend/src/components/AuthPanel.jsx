@@ -19,7 +19,7 @@ export default function AuthPanel({ onLogin, onRegister, loading, error, message
     <div className="clay-card p-6 space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-clay-600">Officer Access</p>
+          <p className="text-xs uppercase tracking-[0.3em] text-clay-600">System Login (Admin & Officer)</p>
           <h2 className="text-2xl font-semibold">Secure Login</h2>
         </div>
         <div className="flex gap-2 text-sm">

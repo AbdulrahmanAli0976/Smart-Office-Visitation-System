@@ -8,6 +8,12 @@ const VISITOR_TYPES = [
   { value: 'AGENT_MERCHANT', label: 'Agent/Merchant' }
 ];
 
+const VISIT_STATUS = [
+  { value: '', label: 'All statuses' },
+  { value: 'ACTIVE', label: 'Active' },
+  { value: 'COMPLETED', label: 'Completed' }
+];
+
 export default function VisitHistoryPanel({
   filters,
   onChange,
@@ -16,7 +22,12 @@ export default function VisitHistoryPanel({
   visits,
   loading,
   officers,
-  isAdmin
+  isAdmin,
+  page,
+  totalPages,
+  total,
+  onPrev,
+  onNext
 }) {
   return (
     <section className="clay-card p-5 space-y-4">
@@ -43,7 +54,14 @@ export default function VisitHistoryPanel({
         </div>
       </div>
 
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-6">
+        <input
+          type="text"
+          className="rounded-xl border border-white/70 bg-white/70 px-3 py-2 text-sm shadow-inner"
+          placeholder="Search visitor/officer"
+          value={filters.search}
+          onChange={(event) => onChange({ ...filters, search: event.target.value })}
+        />
         <input
           type="date"
           className="rounded-xl border border-white/70 bg-white/70 px-3 py-2 text-sm shadow-inner"
@@ -62,6 +80,15 @@ export default function VisitHistoryPanel({
           onChange={(event) => onChange({ ...filters, visitor_type: event.target.value })}
         >
           {VISITOR_TYPES.map((item) => (
+            <option key={item.label} value={item.value}>{item.label}</option>
+          ))}
+        </select>
+        <select
+          className="rounded-xl border border-white/70 bg-white/70 px-3 py-2 text-sm shadow-inner"
+          value={filters.status}
+          onChange={(event) => onChange({ ...filters, status: event.target.value })}
+        >
+          {VISIT_STATUS.map((item) => (
             <option key={item.label} value={item.value}>{item.label}</option>
           ))}
         </select>
@@ -112,7 +139,7 @@ export default function VisitHistoryPanel({
                   </td>
                   <td className="py-2 text-xs uppercase tracking-[0.1em]">{visit.visitor_type?.replace('_', ' ')}</td>
                   <td className="py-2">{new Date(visit.time_in).toLocaleString()}</td>
-                  <td className="py-2">{visit.time_out ? new Date(visit.time_out).toLocaleString() : '—'}</td>
+                  <td className="py-2">{visit.time_out ? new Date(visit.time_out).toLocaleString() : '?'}</td>
                   <td className="py-2">{visit.officer_name}</td>
                   <td className="py-2">
                     <span className={`rounded-full px-2 py-1 text-xs ${visit.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-clay-200 text-clay-700'}`}>
@@ -125,6 +152,26 @@ export default function VisitHistoryPanel({
           </table>
         </div>
       )}
+
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-clay-600">
+        <span>Page {page} of {totalPages} ? Showing {visits.length} of {total}</span>
+        <div className="flex items-center gap-2">
+          <button
+            className="rounded-lg border border-clay-300 px-3 py-1 text-xs text-clay-700 disabled:opacity-60"
+            onClick={onPrev}
+            disabled={page <= 1}
+          >
+            Previous
+          </button>
+          <button
+            className="rounded-lg border border-clay-300 px-3 py-1 text-xs text-clay-700 disabled:opacity-60"
+            onClick={onNext}
+            disabled={page >= totalPages}
+          >
+            Next
+          </button>
+        </div>
+      </div>
     </section>
   );
 }
