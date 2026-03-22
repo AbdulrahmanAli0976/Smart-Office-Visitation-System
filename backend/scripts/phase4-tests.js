@@ -9,6 +9,7 @@ const created = {
   adminId: null,
   officerId: null,
   inactiveOfficerId: null,
+  bulkPhones: [],
   visitorIds: [],
   visitIds: []
 };
@@ -59,6 +60,33 @@ async function run() {
     });
     record('Admin login', response.status === 200 && response.data?.success === true);
     const adminToken = response.data?.data?.token;
+
+    // Admin can perform visit actions
+    const adminVisitorCode = `ADMIN-${Date.now()}`;
+    response = await rawRequest(baseUrl, '/visitors', {
+      method: 'POST',
+      token: adminToken,
+      body: { full_name: 'Admin Visitor', phone_number: `700${Date.now()}`, visitor_type: 'BD', code: adminVisitorCode }
+    });
+    const adminVisitor = response.data?.data?.visitor;
+    if (adminVisitor?.id) created.visitorIds.push(adminVisitor.id);
+    record('Admin create visitor', response.status === 201 && response.data?.success === true);
+
+    response = await rawRequest(baseUrl, '/visits/checkin', {
+      method: 'POST',
+      token: adminToken,
+      body: { query: adminVisitorCode, purpose: 'Admin visit', person_to_see: 'Reception' }
+    });
+    const adminVisitId = response.data?.data?.visit_id;
+    if (adminVisitId) created.visitIds.push(adminVisitId);
+    record('Admin check-in allowed', response.status === 201 && response.data?.success === true);
+
+    if (!adminVisitId) {
+      record('Admin check-out allowed', false, 'Missing admin visit id');
+    } else {
+      response = await rawRequest(baseUrl, `/visits/${adminVisitId}/checkout`, { method: 'PUT', token: adminToken });
+      record('Admin check-out allowed', response.status === 200 && response.data?.data?.status === 'COMPLETED');
+    }
 
     // Officer registration
     const officerEmail = `officer.test+${Date.now()}@example.com`;
@@ -177,6 +205,43 @@ async function run() {
     const activeAfter = response.data?.data || [];
     record('Active visits after checkout', response.status === 200 && !activeAfter.some((v) => v.visit_id === visitId));
 
+    // Bulk check-in/out
+    const bulkCodeBase = `BULK-${Date.now()}`;
+    const bulkPhones = [`800${Date.now()}1`, `800${Date.now()}2`];
+    created.bulkPhones.push(...bulkPhones);
+    response = await rawRequest(baseUrl, '/visits/bulk-checkin', {
+      method: 'POST',
+      token: officerToken,
+      body: {
+        visitors: [
+          { full_name: 'Bulk Visitor One', phone: bulkPhones[0], type: 'BD', code: `${bulkCodeBase}-1` },
+          { full_name: 'Bulk Visitor Two', phone: bulkPhones[1], type: 'AGG', code: `${bulkCodeBase}-2` }
+        ]
+      }
+    });
+    record('Bulk check-in', response.status === 200 && response.data?.success === true);
+
+    const bulkRows = await db.query('SELECT id FROM visitors WHERE phone_number IN (?, ?)', bulkPhones);
+    for (const row of bulkRows) {
+      created.visitorIds.push(row.id);
+    }
+
+    response = await rawRequest(baseUrl, '/visits/active', { token: officerToken });
+    const bulkActive = response.data?.data || [];
+    const bulkVisitIds = bulkActive.filter((v) => bulkPhones.includes(v.phone_number)).map((v) => v.visit_id);
+    if (bulkVisitIds.length) created.visitIds.push(...bulkVisitIds);
+
+    if (bulkVisitIds.length === 0) {
+      record('Bulk check-out', false, 'No bulk visits found');
+    } else {
+      response = await rawRequest(baseUrl, '/visits/bulk-checkout', {
+        method: 'POST',
+        token: officerToken,
+        body: { visitIds: bulkVisitIds }
+      });
+      record('Bulk check-out', response.status === 200 && response.data?.updated === bulkVisitIds.length);
+    }
+
     // Invalid checkout id
     response = await rawRequest(baseUrl, '/visits/9999999/checkout', { method: 'PUT', token: officerToken });
     record('Invalid checkout id', response.status === 404);
@@ -214,6 +279,13 @@ async function run() {
       }
     });
     record('Inactive officer blocked', response.status === 403);
+
+    // Pagination checks
+    response = await rawRequest(baseUrl, '/visitors?page=1&limit=1', { token: adminToken });
+    record('Visitors pagination', response.status === 200 && response.data?.pagination && response.data?.meta);
+
+    response = await rawRequest(baseUrl, '/visits?page=1&limit=5', { token: adminToken });
+    record('Visits pagination', response.status === 200 && response.data?.pagination && response.data?.meta);
   } finally {
     // Cleanup test data
     for (const visitId of created.visitIds) {

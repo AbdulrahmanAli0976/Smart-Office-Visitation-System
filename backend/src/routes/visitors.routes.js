@@ -5,6 +5,7 @@ import {
   updateVisitor,
   findVisitorById,
   searchVisitors,
+  listVisitorsPaged,
   findDuplicates
 } from '../services/visitorService.js';
 import { listVisitorHistory } from '../services/visitService.js';
@@ -15,10 +16,39 @@ const router = express.Router();
 
 const CODE_REQUIRED_TYPES = new Set(['BD', 'MS', 'AGG']);
 const NO_CODE_TYPES = new Set(['AGENT_MERCHANT']);
+const VISITOR_TYPE_ALIASES = {
+  BD: 'BD',
+  MS: 'MS',
+  MSS: 'MS',
+  AGG: 'AGG',
+  AGENT_MERCHANT: 'AGENT_MERCHANT',
+  AGENTMERCHANT: 'AGENT_MERCHANT',
+  MERCHANT: 'AGENT_MERCHANT',
+  OTHER: 'AGENT_MERCHANT'
+};
+const VISITOR_TYPES = new Set(Object.values(VISITOR_TYPE_ALIASES));
+const VISITOR_STATUS = new Set(['ACTIVE', 'DELETED', 'ALL']);
+
+function parsePagination(query) {
+  const page = Math.max(parseInt(query.page, 10) || 1, 1);
+  const limit = Math.min(parseInt(query.limit, 10) || 10, 50);
+  const offset = (page - 1) * limit;
+  return { page, limit, offset };
+}
+
+function normalizeVisitorType(value) {
+  if (value === null || value === undefined) return '';
+  const key = String(value).trim().toUpperCase().replace(/\s+/g, '_');
+  return VISITOR_TYPE_ALIASES[key] || '';
+}
 
 function validateVisitor({ full_name, phone_number, visitor_type, code }) {
   if (!isNonEmptyString(full_name) || !isNonEmptyString(phone_number) || !isNonEmptyString(visitor_type)) {
     return 'Missing required visitor fields';
+  }
+
+  if (!VISITOR_TYPES.has(visitor_type)) {
+    return 'Invalid visitor type';
   }
 
   if (CODE_REQUIRED_TYPES.has(visitor_type) && !isNonEmptyString(code)) {
@@ -31,6 +61,52 @@ function validateVisitor({ full_name, phone_number, visitor_type, code }) {
 
   return null;
 }
+
+router.get('/', requireAuth, async (req, res, next) => {
+  try {
+    const { page, limit, offset } = parsePagination(req.query || {});
+    const search = req.query?.search || '';
+    const status = req.query?.status || '';
+    const typeRaw = req.query?.type || req.query?.visitor_type;
+    const visitorType = normalizeVisitorType(typeRaw);
+
+    if (typeRaw && !visitorType) {
+      return fail(res, 'Invalid visitor type', 400);
+    }
+
+    const normalizedStatus = String(status || '').trim().toUpperCase();
+    if (normalizedStatus && !VISITOR_STATUS.has(normalizedStatus)) {
+      return fail(res, 'Invalid status', 400);
+    }
+
+    const { rows, total } = await listVisitorsPaged({
+      search,
+      status: normalizedStatus || 'ACTIVE',
+      visitorType: visitorType || null,
+      limit,
+      offset
+    });
+
+    return res.json({
+      success: true,
+      data: rows,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      },
+      meta: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (err) {
+    return next(err);
+  }
+});
 
 router.get('/search', requireAuth, async (req, res, next) => {
   try {

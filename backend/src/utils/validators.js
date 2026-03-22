@@ -8,7 +8,8 @@ export function isNonEmptyString(value) {
 
 export function normalizePhone(value) {
   if (!value) return '';
-  return String(value).replace(/\s+/g, '').trim();
+  // Remove spaces, dashes, dots, and parentheses
+  return String(value).replace(/[\s\.\-\(\)]/g, '').trim();
 }
 
 export function sanitizeLike(value) {

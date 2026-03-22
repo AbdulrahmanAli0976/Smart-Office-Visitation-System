@@ -82,3 +82,18 @@ This log captures development actions and integrity checks performed on the syst
 ## 2026-03-18 20:42:07 +01:00
 - Updated PROJECT_STATUS.md with user-provided Phase 7 completion summary and Phase 8 note.
 
+
+## 2026-03-22 10:00:00 +01:00
+- **Admin Fix:** Resolved issue where admins could not check-in/out. Updated \uth.middleware\ to correctly prioritize admin role without unnecessary DB lookups.
+- **Bulk Operations:** Fixed bulk check-in/out logic. Added transactional support and detailed success/failure logging.
+- **Data Integrity:** Added unique constraint on \phone_number\ in \isitors\ table. Updated \isitService\ to use \SELECT ... FOR UPDATE\ to prevent race conditions.
+- **System Hardening:**
+  - Implemented structured JSON logging in \ackend/src/utils/logger.js\.
+  - Added rate limiting to login route.
+  - Implemented fail-fast configuration validation in \ackend/src/config/env.js\.
+  - Hardened error handling to hide stack traces in production.
+- **System Survival:**
+  - Updated \docker-compose.yml\ with \estart: unless-stopped\ for all services.
+  - Implemented graceful shutdown handling for SIGTERM/SIGINT in \ackend/src/server.js\.
+  - Upgraded \/health\ endpoint to perform real DB connectivity checks.
+
