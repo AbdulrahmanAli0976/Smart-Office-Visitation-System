@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS visitors (
   deleted_at DATETIME NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  INDEX idx_visitors_phone (phone_number),
+  UNIQUE KEY ux_visitors_phone (phone_number),
   INDEX idx_visitors_name (full_name),
   INDEX idx_visitors_type (visitor_type),
   INDEX idx_visitors_deleted_at (deleted_at)
@@ -47,4 +47,13 @@ CREATE TABLE IF NOT EXISTS visits (
   INDEX idx_visits_visitor_status (visitor_id, status),
   INDEX idx_visits_officer (officer_id),
   INDEX idx_visits_deleted_at (deleted_at)
+);
+
+CREATE TABLE IF NOT EXISTS token_blacklist (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  token VARCHAR(512) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_blacklist_token (token(191)),
+  INDEX idx_blacklist_expires (expires_at)
 );

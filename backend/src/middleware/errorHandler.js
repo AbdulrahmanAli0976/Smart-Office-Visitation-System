@@ -1,4 +1,4 @@
-import { fail } from '../utils/response.js';
+﻿import { fail } from '../utils/response.js';
 import { logger } from '../utils/logger.js';
 
 export function errorHandler(err, req, res, next) {
@@ -9,10 +9,16 @@ export function errorHandler(err, req, res, next) {
   logger.error('request_failed', {
     status,
     message: err.message,
-    path: req.originalUrl,
+    route: req.safeRoute || req.originalUrl,
     method: req.method,
+    requestId: req.requestId,
+    userId: req.user?.id ?? null,
     stack: !isProduction ? err.stack : undefined
   });
 
-  return fail(res, message, status);
+  fail(res, message, status);
+
+  if (req.app?.get('sentryEnabled')) {
+    return next(err);
+  }
 }

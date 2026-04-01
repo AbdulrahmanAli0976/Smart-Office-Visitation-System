@@ -1,13 +1,15 @@
+version: '3.9'
+
 services:
   db:
     image: mysql:8.0
-    restart: unless-stopped
-    command: --default-authentication-plugin=mysql_native_password
+    restart: always
+    env_file: .env.production
     environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
       MYSQL_DATABASE: ${DB_NAME}
       MYSQL_USER: ${DB_USER}
       MYSQL_PASSWORD: ${DB_PASSWORD}
-      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
       TZ: ${TZ:-UTC}
     volumes:
       - db_data:/var/lib/mysql
@@ -21,21 +23,8 @@ services:
   backend:
     build:
       context: ./backend
-    restart: unless-stopped
-    environment:
-      NODE_ENV: production
-      PORT: 4000
-      DB_HOST: db
-      DB_PORT: 3306
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_NAME: ${DB_NAME}
-      JWT_SECRET: ${JWT_SECRET}
-      CORS_ORIGIN: ${CORS_ORIGIN}
-      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-900000}
-      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-300}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
-      HTTP_LOG_FORMAT: ${HTTP_LOG_FORMAT:-combined}
+    restart: always
+    env_file: .env.production
     depends_on:
       db:
         condition: service_healthy
@@ -55,7 +44,8 @@ services:
       context: ./frontend
       args:
         VITE_API_BASE: ${VITE_API_BASE:-/api}
-    restart: unless-stopped
+    restart: always
+    env_file: .env.production
     depends_on:
       backend:
         condition: service_healthy

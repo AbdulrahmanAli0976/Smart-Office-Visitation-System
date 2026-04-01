@@ -1,23 +1,20 @@
-import express from 'express';
+﻿import express from 'express';
 import { db } from '../config/db.js';
-import { ok, fail } from '../utils/response.js';
 
 const router = express.Router();
 
 router.get('/', async (req, res) => {
   try {
-    await db.query('SELECT 1');
-    return ok(res, { 
-      status: 'ok', 
-      db: 'connected',
-      time: new Date().toISOString() 
+    await db.queryWithTimeout('SELECT 1', [], 2000);
+    return res.status(200).json({
+      status: 'OK',
+      database: 'UP'
     });
   } catch (err) {
-    return fail(res, {
-      status: 'error',
-      db: 'disconnected',
-      message: err.message
-    }, 503);
+    return res.status(500).json({
+      status: 'ERROR',
+      database: 'DOWN'
+    });
   }
 });
 

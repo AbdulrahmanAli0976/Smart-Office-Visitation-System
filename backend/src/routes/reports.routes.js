@@ -1,5 +1,5 @@
-import express from 'express';
-import { requireAuth } from '../middleware/auth.js';
+﻿import express from 'express';
+import { requireAuth, requireActiveOfficer, requireRole } from '../middleware/auth.js';
 import { getSummary, getDashboardMetrics, getVisitorsPerDay, getVisitorTypeDistribution } from '../services/reportService.js';
 import { ok, fail } from '../utils/response.js';
 
@@ -9,7 +9,10 @@ function isValidDate(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
-router.get('/summary', requireAuth, async (req, res, next) => {
+// All reports require active officer or admin
+router.use(requireAuth, requireActiveOfficer);
+
+router.get('/summary', async (req, res, next) => {
   try {
     const { from, to } = req.query || {};
 
@@ -24,7 +27,7 @@ router.get('/summary', requireAuth, async (req, res, next) => {
   }
 });
 
-router.get('/dashboard', requireAuth, async (req, res, next) => {
+router.get('/dashboard', requireRole('ADMIN'), async (req, res, next) => {
   try {
     const metrics = await getDashboardMetrics();
     return ok(res, metrics);
@@ -33,7 +36,7 @@ router.get('/dashboard', requireAuth, async (req, res, next) => {
   }
 });
 
-router.get('/visitors-per-day', requireAuth, async (req, res, next) => {
+router.get('/visitors-per-day', async (req, res, next) => {
   try {
     const { from, to } = req.query || {};
 
@@ -48,7 +51,7 @@ router.get('/visitors-per-day', requireAuth, async (req, res, next) => {
   }
 });
 
-router.get('/visitor-types', requireAuth, async (req, res, next) => {
+router.get('/visitor-types', async (req, res, next) => {
   try {
     const { from, to } = req.query || {};
 

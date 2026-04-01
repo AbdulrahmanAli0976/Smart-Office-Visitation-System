@@ -59,7 +59,11 @@ export default function AdminPanel({
 
       <div className="space-y-3">
         {officers.length === 0 && (
-          <p className="text-sm text-clay-600">No officers registered yet.</p>
+          <div className="rounded-2xl border border-clay-200 bg-white/70 px-6 py-6 text-center text-sm text-clay-700 shadow-inner">
+            <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-clay-200/70 text-xs uppercase tracking-[0.2em] text-clay-700">i</div>
+            <p className="font-semibold">No officers found</p>
+            <p className="mt-1 text-xs text-clay-600">Invite new officers or adjust search filters.</p>
+          </div>
         )}
         {officers.map((officer) => (
           <div key={officer.id} className="flex flex-col gap-3 rounded-xl bg-white/70 px-4 py-3 shadow-inner md:flex-row md:items-center md:justify-between">

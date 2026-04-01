@@ -6,11 +6,17 @@ export default class ErrorBoundary extends React.Component {
     this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError() {
+  static getDerivedStateFromError(error) {
+    if (error && (error.status === 401 || error.status === 403 || error.isAuthError)) {
+      return null;
+    }
     return { hasError: true };
   }
 
   componentDidCatch(error, info) {
+    if (error && (error.status === 401 || error.status === 403 || error.isAuthError)) {
+      return;
+    }
     if (this.props.onError) {
       this.props.onError(error, info);
     }

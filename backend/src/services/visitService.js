@@ -1,5 +1,7 @@
-import { db } from '../config/db.js';
-import { normalizePhone, sanitizeLike } from '../utils/validators.js';
+﻿import { db } from '../config/db.js';
+import { normalizePhone } from '../utils/normalizePhone.js';
+import { sanitizeLike } from '../utils/validators.js';
+import { logger } from '../utils/logger.js';
 
 export async function createVisit({ visitorId, officerId, purpose, personToSee }) {
   const result = await db.query(
@@ -15,15 +17,25 @@ export async function createVisitAtomic({ visitorId, officerId, purpose, personT
   try {
     await conn.beginTransaction();
 
+    // Lock visitor row to prevent concurrent visits for the same identity
+    const [visitorRows] = await conn.execute(
+      `SELECT id FROM visitors WHERE id = ? AND deleted_at IS NULL FOR UPDATE`,
+      [visitorId]
+    );
+
+    if (visitorRows.length === 0) {
+      await conn.rollback();
+      return { error: 'Visitor not found' };
+    }
+
+    // Check for existing active visit
     const [activeRows] = await conn.execute(
-      `SELECT id
-       FROM visits
-       WHERE visitor_id = ? AND status = 'ACTIVE' AND deleted_at IS NULL
-       FOR UPDATE`,
+      `SELECT id FROM visits WHERE visitor_id = ? AND status = 'ACTIVE' AND time_out IS NULL AND deleted_at IS NULL FOR UPDATE`,
       [visitorId]
     );
 
     if (activeRows.length > 0) {
+      // Idempotency: If same officer and purpose, treat as success (or just return conflict)
       await conn.rollback();
       return { conflict: true, visitId: activeRows[0].id };
     }
@@ -35,13 +47,9 @@ export async function createVisitAtomic({ visitorId, officerId, purpose, personT
     );
 
     await conn.commit();
-    return { visitId: result.insertId };
+    return { success: true, visitId: result.insertId };
   } catch (err) {
-    try {
-      await conn.rollback();
-    } catch (_) {
-      // ignore rollback errors
-    }
+    try { await conn.rollback(); } catch (_) { }
     throw err;
   } finally {
     conn.release();
@@ -56,18 +64,18 @@ export async function bulkCheckIn({ officerId, visitors, purpose, personToSee })
     await conn.beginTransaction();
 
     for (const visitor of visitors) {
-      const fullName = visitor.full_name.trim();
-      const phone = normalizePhone(visitor.phone_number || visitor.phone);
-      const visitorType = visitor.visitor_type;
-      const code = visitor.code ? visitor.code.trim() : null;
-
       try {
-        let visitorId = null;
-        let created = false;
+        const fullName = visitor.full_name.trim();
+        const phone = normalizePhone(visitor.phone_number || visitor.phone);
+        const visitorType = visitor.visitor_type;
+        const code = visitor.code ? visitor.code.trim() : null;
 
-        // Try to find existing visitor by phone
+        let visitorId = null;
+        let isNewVisitor = false;
+
+        // 1. Lock/Find Visitor
         const [existing] = await conn.execute(
-          `SELECT id FROM visitors WHERE phone_number = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE`,
+          `SELECT id FROM visitors WHERE phone_number = ? AND deleted_at IS NULL FOR UPDATE`,
           [phone]
         );
 
@@ -81,50 +89,46 @@ export async function bulkCheckIn({ officerId, visitors, purpose, personToSee })
               [fullName, phone, visitorType, code || null]
             );
             visitorId = insert.insertId;
-            created = true;
+            isNewVisitor = true;
           } catch (insErr) {
             if (insErr.code === 'ER_DUP_ENTRY') {
-              // Race condition: someone inserted this phone between our SELECT and INSERT
-              const [retryEx] = await conn.execute(
-                `SELECT id FROM visitors WHERE phone_number = ? AND deleted_at IS NULL LIMIT 1 FOR UPDATE`,
+              const [retry] = await conn.execute(
+                `SELECT id FROM visitors WHERE phone_number = ? AND deleted_at IS NULL FOR UPDATE`,
                 [phone]
               );
-              if (retryEx.length > 0) {
-                visitorId = retryEx[0].id;
-              } else {
-                summary.failed += 1;
-                continue;
-              }
-            } else {
-              throw insErr;
-            }
+              visitorId = retry[0]?.id;
+            } else { throw insErr; }
           }
         }
 
-        // Check for active visit
-        const [active] = await conn.execute(
-          `SELECT id FROM visits WHERE visitor_id = ? AND status = 'ACTIVE' AND deleted_at IS NULL FOR UPDATE`,
-          [visitorId]
-        );
-
-        if (active.length > 0) {
+        if (!visitorId) {
           summary.failed += 1;
           continue;
         }
 
+        // 2. Lock/Check Active Visit
+        const [active] = await conn.execute(
+          `SELECT id FROM visits WHERE visitor_id = ? AND status = 'ACTIVE' AND time_out IS NULL AND deleted_at IS NULL FOR UPDATE`,
+          [visitorId]
+        );
+
+        if (active.length > 0) {
+          await conn.rollback();
+          return { conflict: true };
+        }
+
+        // 3. Create Visit
         await conn.execute(
           `INSERT INTO visits (visitor_id, officer_id, purpose, person_to_see, time_in, status)
            VALUES (?, ?, ?, ?, NOW(), 'ACTIVE')`,
           [visitorId, officerId, purpose, personToSee]
         );
 
-        if (created) {
-          summary.created += 1;
-        } else {
-          summary.reused += 1;
-        }
-      } catch (err) {
-        logger.error('visits.bulk_checkin_row_failed', { error: err.message, phone });
+        if (isNewVisitor) summary.created += 1;
+        else summary.reused += 1;
+
+      } catch (rowErr) {
+        logger.error('visits.bulk_checkin_row_failed', { error: rowErr.message, visitor });
         summary.failed += 1;
       }
     }
@@ -132,11 +136,7 @@ export async function bulkCheckIn({ officerId, visitors, purpose, personToSee })
     await conn.commit();
     return summary;
   } catch (err) {
-    try {
-      await conn.rollback();
-    } catch (_) {
-      // ignore rollback errors
-    }
+    try { await conn.rollback(); } catch (_) { }
     throw err;
   } finally {
     conn.release();
@@ -306,3 +306,6 @@ export async function findActiveVisitByVisitor(visitorId) {
   );
   return rows[0] || null;
 }
+
+
+

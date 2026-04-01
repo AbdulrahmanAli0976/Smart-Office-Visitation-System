@@ -1,12 +1,16 @@
-import express from 'express';
+﻿import express from 'express';
 import { requireAuth, requireActiveOfficer } from '../middleware/auth.js';
-import { createVisitor, searchVisitors, findDuplicates } from '../services/visitorService.js';
+import { createVisitor, searchVisitors, findDuplicates, findVisitorByPhone } from '../services/visitorService.js';
 import { bulkCheckIn, bulkCheckOut, createVisitAtomic, completeVisit, listActiveVisits, listVisitHistory, listVisitHistoryPaged } from '../services/visitService.js';
-import { isNonEmptyString } from '../utils/validators.js';
+import { normalizePhone } from '../utils/normalizePhone.js';
+import { isNonEmptyString, sanitizeText, isSafeString } from '../utils/validators.js';
 import { ok, fail } from '../utils/response.js';
 import { logger } from '../utils/logger.js';
 
 const router = express.Router();
+
+// All visit routes require an active officer or admin
+router.use(requireAuth, requireActiveOfficer);
 
 const CODE_REQUIRED_TYPES = new Set(['BD', 'MS', 'AGG']);
 const NO_CODE_TYPES = new Set(['AGENT_MERCHANT']);
@@ -43,111 +47,121 @@ function normalizeVisitorType(value) {
 
 function validateVisitorInput(visitor) {
   if (!visitor) return 'Visitor data is required';
-  const { full_name, phone_number, visitor_type, code } = visitor;
+  const fullName = sanitizeText(visitor.full_name);
+  const phoneNumber = normalizePhone(visitor.phone_number);
+  const visitorType = normalizeVisitorType(visitor.visitor_type);
+  const code = sanitizeText(visitor.code);
 
-  if (!isNonEmptyString(full_name) || !isNonEmptyString(phone_number) || !isNonEmptyString(visitor_type)) {
-    return 'Missing required visitor fields';
+  if (!isSafeString(fullName, 120) || !phoneNumber || !visitorType) {
+    return 'Missing or invalid required visitor fields';
   }
 
-  if (!VISITOR_TYPES.has(visitor_type)) {
+  if (!VISITOR_TYPES.has(visitorType)) {
     return 'Invalid visitor type';
   }
 
-  if (CODE_REQUIRED_TYPES.has(visitor_type) && !isNonEmptyString(code)) {
-    return 'Code is required for this visitor type';
+  if (CODE_REQUIRED_TYPES.has(visitorType) && !isSafeString(code, 50)) {
+    return 'Valid code is required for this visitor type';
   }
 
-  if (NO_CODE_TYPES.has(visitor_type) && isNonEmptyString(code)) {
+  if (NO_CODE_TYPES.has(visitorType) && isNonEmptyString(code)) {
     return 'Code must be empty for Agent/Merchant';
   }
+
+  // Update object with sanitized values
+  visitor.full_name = fullName;
+  visitor.phone_number = phoneNumber;
+  visitor.visitor_type = visitorType;
+  visitor.code = code || null;
 
   return null;
 }
 
-router.post('/checkin', requireAuth, requireActiveOfficer, async (req, res, next) => {
+router.post('/checkin', async (req, res, next) => {
+  const userId = req.user?.id;
   try {
     const body = req.body || {};
     const { query, visitor, purpose, person_to_see } = body;
 
-    if (!isNonEmptyString(purpose) || !isNonEmptyString(person_to_see)) {
-      return fail(res, 'Purpose and person to see are required', 400);
-    }
+    const sanitizedPurpose = sanitizeText(purpose);
+    const sanitizedPerson = sanitizeText(person_to_see);
 
-    const hasQuery = Object.prototype.hasOwnProperty.call(body, 'query');
-    if (hasQuery && (query === null || query === undefined)) {
-      logger.warn('visits.checkin_invalid_query', { query });
-      return fail(res, 'Query cannot be null', 400);
-    }
-    if (hasQuery && query !== null && query !== undefined && typeof query !== 'string') {
-      logger.warn('visits.checkin_invalid_query', { query });
-      return fail(res, 'Query must be a string', 400);
+    if (!isSafeString(sanitizedPurpose, 255) || !isSafeString(sanitizedPerson, 120)) {
+      return fail(res, 'Purpose and person to see are required and must be within limits', 400);
     }
 
     let selectedVisitor = null;
     if (isNonEmptyString(query)) {
-      const results = await searchVisitors(query, 5);
+      const results = await searchVisitors(sanitizeText(query), 5);
       if (results.length > 0) {
         selectedVisitor = results[0];
       }
     }
 
     if (!selectedVisitor && visitor) {
-      const phone = normalizePhone(visitor.phone_number);
-      const results = await searchVisitors(phone, 1);
-      if (results.length > 0) {
-        selectedVisitor = results[0];
-        logger.info('visits.checkin_reuse_visitor', { visitorId: selectedVisitor.id, phone });
+      const error = validateVisitorInput(visitor);
+      if (error) {
+        logger.warn('visits.checkin_invalid_payload', { operation: 'CHECKIN', userId, error, visitor });
+        return fail(res, error, 400);
+      }
+      
+      const phone = visitor.phone_number;
+      const existing = await findVisitorByPhone(phone);
+      if (existing) {
+        selectedVisitor = existing;
+        logger.info('visits.checkin_reuse_visitor', { operation: 'CHECKIN', userId, visitorId: existing.id, phone });
       }
     }
 
     let duplicates = [];
     if (!selectedVisitor) {
-      const error = validateVisitorInput(visitor);
-      if (error) {
-        logger.warn('visits.checkin_invalid_payload', { error, visitor });
-        return fail(res, error, 400);
-      }
-
+      // validateVisitorInput already called above if !selectedVisitor && visitor
       duplicates = await findDuplicates({
-        fullName: visitor.full_name.trim(),
+        fullName: visitor.full_name,
         phoneNumber: visitor.phone_number
       });
 
-      const visitorId = await createVisitor({
-        fullName: visitor.full_name.trim(),
-        phoneNumber: visitor.phone_number,
-        visitorType: visitor.visitor_type,
-        code: visitor.code
-      });
-
-      selectedVisitor = { id: visitorId };
-      logger.info('visits.checkin_new_visitor', { visitorId, fullName: visitor.full_name });
+      try {
+        const visitorId = await createVisitor({
+          fullName: visitor.full_name,
+          phoneNumber: visitor.phone_number,
+          visitorType: visitor.visitor_type,
+          code: visitor.code
+        });
+        selectedVisitor = { id: visitorId };
+        logger.info('visits.checkin_new_visitor', { operation: 'CHECKIN', userId, visitorId, fullName: visitor.full_name });
+      } catch (err) {
+        if (err.code === 'ER_DUP_ENTRY') {
+          selectedVisitor = await findVisitorByPhone(visitor.phone_number);
+          logger.info('visits.checkin_concurrent_visitor_recovery', { operation: 'CHECKIN', userId, visitorId: selectedVisitor?.id });
+        } else { throw err; }
+      }
     }
 
     const visitorId = parseInt(selectedVisitor?.id, 10);
     if (!Number.isInteger(visitorId)) {
-      logger.warn('visits.checkin_invalid_visitor', { visitorId: selectedVisitor?.id });
+      logger.warn('visits.checkin_invalid_visitor', { operation: 'CHECKIN', userId, visitorId: selectedVisitor?.id });
       return fail(res, 'Invalid visitor id', 400);
     }
 
-    const officerId = parseInt(req.user?.id, 10);
-    if (!Number.isInteger(officerId)) {
-      logger.warn('visits.checkin_invalid_officer', { officerId: req.user?.id });
-      return fail(res, 'Invalid officer id', 400);
-    }
-
+    const officerId = parseInt(userId, 10);
     const result = await createVisitAtomic({
       visitorId,
       officerId,
-      purpose: purpose.trim(),
-      personToSee: person_to_see.trim()
+      purpose: sanitizedPurpose,
+      personToSee: sanitizedPerson
     });
 
-    if (result.conflict) {
-      return fail(res, 'Visitor is already checked in', 409);
+    if (result.error) {
+      return fail(res, result.error, 400);
     }
 
-    logger.info('visits.checkin_success', { visitId: result.visitId, visitorId, officerId });
+    if (result.conflict) {
+      logger.info('visits.checkin_conflict', { operation: 'CHECKIN', userId, visitorId, visitId: result.visitId });
+      return fail(res, 'Visitor already checked in', 409);
+    }
+
+    logger.info('visits.checkin_success', { operation: 'CHECKIN', userId, visitId: result.visitId, visitorId });
 
     return ok(res, {
       visit_id: result.visitId,
@@ -158,76 +172,59 @@ router.post('/checkin', requireAuth, requireActiveOfficer, async (req, res, next
     if (err.code === 'ER_DUP_ENTRY') {
       return fail(res, 'Visitor code must be unique', 409);
     }
+    logger.error('visits.checkin_failed', { operation: 'CHECKIN', userId, error: err.message });
     return next(err);
   }
 });
 
 
-router.post('/bulk-checkin', requireAuth, requireActiveOfficer, async (req, res, next) => {
+router.post('/bulk-checkin', async (req, res, next) => {
+  const userId = req.user?.id;
   try {
     const body = req.body || {};
     const visitors = Array.isArray(body.visitors) ? body.visitors : null;
     if (!visitors || visitors.length === 0) {
-      logger.warn('visits.bulk_checkin_invalid_payload', { reason: 'empty_visitors' });
+      logger.warn('visits.bulk_checkin_invalid_payload', { operation: 'BULK_CHECKIN', userId, reason: 'empty_visitors' });
       return fail(res, 'Visitors array is required', 400);
     }
     if (visitors.length > 150) {
-      logger.warn('visits.bulk_checkin_invalid_payload', { reason: 'too_many_visitors', count: visitors.length });
+      logger.warn('visits.bulk_checkin_invalid_payload', { operation: 'BULK_CHECKIN', userId, reason: 'too_many_visitors', count: visitors.length });
       return fail(res, 'Maximum 150 visitors per request', 400);
     }
 
-    const officerId = parseInt(req.user?.id, 10);
-    if (!Number.isInteger(officerId)) {
-      logger.warn('visits.bulk_checkin_invalid_officer', { officerId: req.user?.id });
-      return fail(res, 'Invalid officer id', 400);
-    }
-
-    const purpose = isNonEmptyString(body.purpose) ? body.purpose.trim() : 'Bulk check-in';
-    const personToSee = isNonEmptyString(body.person_to_see) ? body.person_to_see.trim() : 'Bulk check-in';
+    const officerId = parseInt(userId, 10);
+    const purpose = sanitizeText(body.purpose || 'Bulk check-in');
+    const personToSee = sanitizeText(body.person_to_see || 'Bulk check-in');
 
     const normalized = [];
     let invalidCount = 0;
 
     visitors.forEach((entry, index) => {
-      const fullName = entry?.full_name ?? entry?.fullName;
-      const phone = entry?.phone ?? entry?.phone_number;
-      const typeRaw = entry?.type ?? entry?.visitor_type;
-      const visitorType = normalizeVisitorType(typeRaw);
-      const code = entry?.code ?? '';
+      const visitor = {
+        full_name: entry?.full_name ?? entry?.fullName,
+        phone_number: entry?.phone ?? entry?.phone_number,
+        visitor_type: entry?.type ?? entry?.visitor_type,
+        code: entry?.code ?? ''
+      };
 
-      if (!isNonEmptyString(fullName) || !isNonEmptyString(phone) || !visitorType) {
+      const error = validateVisitorInput(visitor);
+      if (error) {
         invalidCount += 1;
-        logger.warn('visits.bulk_checkin_invalid_row', { index, reason: 'missing_fields', full_name: fullName, phone, type: typeRaw });
+        logger.warn('visits.bulk_checkin_invalid_row', { operation: 'BULK_CHECKIN', userId, index, reason: error });
         return;
       }
 
-      if (CODE_REQUIRED_TYPES.has(visitorType) && !isNonEmptyString(code)) {
-        invalidCount += 1;
-        logger.warn('visits.bulk_checkin_invalid_row', { index, reason: 'code_required', full_name: fullName, phone, type: visitorType });
-        return;
-      }
-
-      if (NO_CODE_TYPES.has(visitorType) && isNonEmptyString(code)) {
-        invalidCount += 1;
-        logger.warn('visits.bulk_checkin_invalid_row', { index, reason: 'code_not_allowed', full_name: fullName, phone, type: visitorType });
-        return;
-      }
-
-      normalized.push({
-        full_name: fullName.trim(),
-        phone_number: String(phone).trim(),
-        visitor_type: visitorType,
-        code: isNonEmptyString(code) ? String(code).trim() : null
-      });
+      normalized.push(visitor);
     });
 
     if (!normalized.length) {
-      logger.warn('visits.bulk_checkin_invalid_payload', { reason: 'no_valid_visitors' });
+      logger.warn('visits.bulk_checkin_invalid_payload', { operation: 'BULK_CHECKIN', userId, reason: 'no_valid_visitors' });
       return fail(res, 'No valid visitors to process', 400);
     }
 
     logger.info('visits.bulk_checkin_request', {
-      userId: officerId,
+      operation: 'BULK_CHECKIN',
+      userId,
       count: visitors.length,
       valid: normalized.length,
       invalid: invalidCount
@@ -240,10 +237,15 @@ router.post('/bulk-checkin', requireAuth, requireActiveOfficer, async (req, res,
       personToSee
     });
 
+    if (summary.conflict) {
+      return fail(res, 'Visitor already checked in', 409);
+    }
+
     const failed = summary.failed + invalidCount;
 
     logger.info('visits.bulk_checkin_success', {
-      userId: officerId,
+      operation: 'BULK_CHECKIN',
+      userId,
       created: summary.created,
       reused: summary.reused,
       failed
@@ -256,37 +258,38 @@ router.post('/bulk-checkin', requireAuth, requireActiveOfficer, async (req, res,
       failed
     });
   } catch (err) {
-    logger.error('visits.bulk_checkin_failed', { error: err.message, userId: req.user?.id });
+    logger.error('visits.bulk_checkin_failed', { operation: 'BULK_CHECKIN', userId, error: err.message });
     return next(err);
   }
 });
 
-router.post('/bulk-checkout', requireAuth, requireActiveOfficer, async (req, res, next) => {
+router.post('/bulk-checkout', async (req, res, next) => {
+  const userId = req.user?.id;
   try {
     const visitIds = Array.isArray(req.body?.visitIds) ? req.body.visitIds : null;
     if (!visitIds || visitIds.length === 0) {
-      logger.warn('visits.bulk_checkout_invalid_payload', { reason: 'empty_visitIds' });
+      logger.warn('visits.bulk_checkout_invalid_payload', { operation: 'BULK_CHECKOUT', userId, reason: 'empty_visitIds' });
       return fail(res, 'visitIds array is required', 400);
     }
     if (visitIds.length > 150) {
-      logger.warn('visits.bulk_checkout_invalid_payload', { reason: 'too_many_visitIds', count: visitIds.length });
+      logger.warn('visits.bulk_checkout_invalid_payload', { operation: 'BULK_CHECKOUT', userId, reason: 'too_many_visitIds', count: visitIds.length });
       return fail(res, 'Maximum 150 visits per request', 400);
     }
 
     const parsed = visitIds.map((id) => parseInt(id, 10));
     if (parsed.some((id) => !Number.isInteger(id))) {
-      logger.warn('visits.bulk_checkout_invalid_ids', { visitIds });
+      logger.warn('visits.bulk_checkout_invalid_ids', { operation: 'BULK_CHECKOUT', userId, visitIds });
       return fail(res, 'All visit IDs must be integers', 400);
     }
 
     const unique = Array.from(new Set(parsed));
 
-    logger.info('visits.bulk_checkout_request', { userId: req.user?.id, count: unique.length });
+    logger.info('visits.bulk_checkout_request', { operation: 'BULK_CHECKOUT', userId, count: unique.length });
 
     const updated = await bulkCheckOut({ visitIds: unique });
     const failed = unique.length - updated;
 
-    logger.info('visits.bulk_checkout_success', { userId: req.user?.id, updated, failed });
+    logger.info('visits.bulk_checkout_success', { operation: 'BULK_CHECKOUT', userId, updated, failed });
 
     return res.json({
       success: true,
@@ -295,12 +298,12 @@ router.post('/bulk-checkout', requireAuth, requireActiveOfficer, async (req, res
       total: unique.length
     });
   } catch (err) {
-    logger.error('visits.bulk_checkout_failed', { error: err.message, userId: req.user?.id });
+    logger.error('visits.bulk_checkout_failed', { operation: 'BULK_CHECKOUT', userId, error: err.message });
     return next(err);
   }
 });
 
-router.get('/', requireAuth, async (req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
     const { officer_id } = req.query || {};
     const from = req.query?.date_from || req.query?.from;
@@ -338,7 +341,7 @@ router.get('/', requireAuth, async (req, res, next) => {
       visitorType: visitorType || null,
       officerId,
       status: normalizedStatus || null,
-      search,
+      search: sanitizeText(search),
       limit,
       offset
     });
@@ -365,7 +368,7 @@ router.get('/', requireAuth, async (req, res, next) => {
 });
 
 
-router.get('/active', requireAuth, async (req, res, next) => {
+router.get('/active', async (req, res, next) => {
   try {
     const visits = await listActiveVisits();
     return ok(res, visits);
@@ -374,7 +377,7 @@ router.get('/active', requireAuth, async (req, res, next) => {
   }
 });
 
-router.get('/history', requireAuth, async (req, res, next) => {
+router.get('/history', async (req, res, next) => {
   try {
     const { officer_id } = req.query || {};
     const from = req.query?.date_from || req.query?.from;
@@ -412,7 +415,7 @@ router.get('/history', requireAuth, async (req, res, next) => {
       visitorType: visitorType || null,
       officerId,
       status: normalizedStatus || null,
-      search,
+      search: sanitizeText(search),
       limit,
       offset
     });
@@ -438,7 +441,7 @@ router.get('/history', requireAuth, async (req, res, next) => {
   }
 });
 
-router.get('/export', requireAuth, async (req, res, next) => {
+router.get('/export', async (req, res, next) => {
   try {
     const { from, to, visitor_type, officer_id, format } = req.query || {};
 
@@ -520,28 +523,33 @@ router.get('/export', requireAuth, async (req, res, next) => {
   }
 });
 
-router.put('/:id/checkout', requireAuth, requireActiveOfficer, async (req, res, next) => {
+router.put('/:id/checkout', async (req, res, next) => {
+  const userId = req.user?.id;
   try {
     const rawId = req.params?.id;
-    logger.info('visits.checkout_request', { id: rawId, userId: req.user?.id });
+    logger.info('visits.checkout_request', { operation: 'CHECKOUT', userId, id: rawId });
 
     const visitId = parseInt(rawId, 10);
     if (!Number.isInteger(visitId)) {
-      logger.warn('visits.checkout_invalid_id', { id: rawId });
+      logger.warn('visits.checkout_invalid_id', { operation: 'CHECKOUT', userId, id: rawId });
       return fail(res, 'Invalid visit id', 400);
     }
 
     const updated = await completeVisit(visitId);
     if (!updated) {
+      logger.warn('visits.checkout_not_found', { operation: 'CHECKOUT', userId, visitId });
       return fail(res, 'Active visit not found', 404);
     }
 
-    logger.info('visits.checkout_success', { visitId, userId: req.user?.id });
+    logger.info('visits.checkout_success', { operation: 'CHECKOUT', userId, visitId });
     return ok(res, { status: 'COMPLETED' });
   } catch (err) {
-    logger.error('visits.checkout_failed', { error: err.message, id: req.params?.id });
+    logger.error('visits.checkout_failed', { operation: 'CHECKOUT', userId, error: err.message, id: req.params?.id });
     return next(err);
   }
 });
 
 export default router;
+
+
+

@@ -12,3 +12,7 @@
 10. Configure HTTPS at the edge (Nginx, load balancer, or managed TLS).
 11. Set up backups and test restore procedures.
 12. Enable monitoring or alerting (Sentry, Datadog, ELK, or similar).
+13. Normalize & dedupe visitors using `backend/scripts/dedupe-visitors.js` before running `database/migrations/20260401_add_unique_phone.sql`.
+14. Deploy through `docker-compose.prod.yml` (no dev mounts) while wiring `.env.production`.
+15. Apply `ops/nginx.prod.conf`, obtain TLS certs for your domain, and ensure `/api/debug/sentry-test` can trigger a Sentry entry (flip `DEBUG_ROUTES_ENABLED`).
+16. Schedule backups with `ops/setup-backup-cron.sh` or `ops/setup-backup-task.ps1` and verify `ops/backup.*` / `ops/restore.*`.

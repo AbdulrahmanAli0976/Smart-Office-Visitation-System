@@ -1,7 +1,10 @@
-import jwt from 'jsonwebtoken';
+﻿import jwt from 'jsonwebtoken';
+import * as Sentry from '@sentry/node';
 import { env } from '../config/env.js';
 import { findUserById } from '../services/userService.js';
+import { isTokenBlacklisted } from '../services/authService.js';
 import { fail } from '../utils/response.js';
+import { logStorage } from '../utils/logger.js';
 
 function normalizeRole(role) {
   return typeof role === 'string' ? role.trim().toUpperCase() : '';
@@ -11,7 +14,7 @@ function normalizeStatus(status) {
   return typeof status === 'string' ? status.trim().toUpperCase() : '';
 }
 
-export function requireAuth(req, res, next) {
+export async function requireAuth(req, res, next) {
   const header = req.headers.authorization || '';
   const token = header.startsWith('Bearer ') ? header.slice(7) : null;
 
@@ -20,6 +23,12 @@ export function requireAuth(req, res, next) {
   }
 
   try {
+    // Check if token is blacklisted
+    const blacklisted = await isTokenBlacklisted(token);
+    if (blacklisted) {
+      return fail(res, 'Token has been revoked', 401);
+    }
+
     const payload = jwt.verify(token, env.jwt.secret);
     const normalizedRole = normalizeRole(payload?.role);
     const normalizedStatus = normalizeStatus(payload?.status);
@@ -29,8 +38,19 @@ export function requireAuth(req, res, next) {
       ...payload,
       id,
       role: normalizedRole,
-      status: normalizedStatus
+      status: normalizedStatus,
+      token // Store raw token for logout/revocation
     };
+
+    const store = logStorage.getStore();
+    if (store) {
+      store.userId = id;
+    }
+
+    if (env.SENTRY_DSN) {
+      Sentry.setUser({ id: String(id) });
+    }
+
     return next();
   } catch (err) {
     return fail(res, 'Invalid or expired token', 401);
@@ -54,15 +74,9 @@ export async function requireActiveOfficer(req, res, next) {
       return fail(res, 'Missing authorization token', 401);
     }
 
-    const role = normalizeRole(req.user.role);
     const userId = parseInt(req.user.id, 10);
     if (!Number.isInteger(userId)) {
       return fail(res, 'Invalid user', 401);
-    }
-
-    // Admin always allowed
-    if (role === 'ADMIN') {
-      return next();
     }
 
     // Resolve user from DB to get the latest status and role
@@ -78,16 +92,16 @@ export async function requireActiveOfficer(req, res, next) {
     req.user.role = resolvedRole;
     req.user.status = resolvedStatus;
 
+    if (resolvedStatus !== 'ACTIVE') {
+      return fail(res, 'User account is not active', 403);
+    }
+
     if (resolvedRole === 'ADMIN') {
       return next();
     }
 
     if (resolvedRole !== 'OFFICER') {
       return fail(res, 'Only officers can perform this action', 403);
-    }
-
-    if (resolvedStatus !== 'ACTIVE') {
-      return fail(res, 'Officer account is not active', 403);
     }
 
     return next();
