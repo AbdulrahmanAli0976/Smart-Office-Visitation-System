@@ -1,21 +1,56 @@
-import { db } from '../config/db.js';
-import { normalizePhone, sanitizeLike } from '../utils/validators.js';
+﻿import { db } from '../config/db.js';
+import { normalizePhone } from '../utils/normalizePhone.js';
+import { sanitizeLike } from '../utils/validators.js';
 
 export async function createVisitor({ fullName, phoneNumber, visitorType, code }) {
+  const normalizedPhone = normalizePhone(phoneNumber);
+  if (!normalizedPhone) {
+    const err = new Error('Invalid phone number');
+    err.status = 400;
+    throw err;
+  }
+
+  const existing = await db.query(
+    `SELECT id FROM visitors WHERE phone_number = ? AND deleted_at IS NULL LIMIT 1`,
+    [normalizedPhone]
+  );
+  if (existing.length > 0) {
+    return existing[0].id;
+  }
+
   const result = await db.query(
     `INSERT INTO visitors (full_name, phone_number, visitor_type, code)
      VALUES (?, ?, ?, ?)`,
-    [fullName, normalizePhone(phoneNumber), visitorType, code || null]
+    [fullName.trim(), normalizedPhone, visitorType, code ? code.trim() : null]
   );
   return result.insertId;
 }
 
+export async function findVisitorByPhone(phone, lock = false) {
+  const normalizedPhone = normalizePhone(phone);
+  if (!normalizedPhone) return null;
+  const lockSql = lock ? ' FOR UPDATE' : '';
+  const rows = await db.query(
+    `SELECT id, full_name, phone_number, visitor_type, code, created_at, updated_at 
+     FROM visitors 
+     WHERE phone_number = ? AND deleted_at IS NULL${lockSql} LIMIT 1`,
+    [normalizedPhone]
+  );
+  return rows[0] || null;
+}
+
 export async function updateVisitor(id, { fullName, phoneNumber, visitorType, code }) {
+  const normalizedPhone = normalizePhone(phoneNumber);
+  if (!normalizedPhone) {
+    const err = new Error('Invalid phone number');
+    err.status = 400;
+    throw err;
+  }
   const result = await db.query(
     `UPDATE visitors
      SET full_name = ?, phone_number = ?, visitor_type = ?, code = ?, updated_at = NOW()
      WHERE id = ? AND deleted_at IS NULL`,
-    [fullName, normalizePhone(phoneNumber), visitorType, code || null, id]
+    [fullName.trim(), normalizedPhone, visitorType, code ? code.trim() : null, id]
   );
   return result.affectedRows;
 }
@@ -33,26 +68,27 @@ export async function searchVisitors(query, limit = 20) {
   if (!q) return [];
 
   const normalizedPhone = normalizePhone(q);
-  const phoneLike = `%${sanitizeLike(normalizedPhone)}%`;
-  const nameLike = `%${sanitizeLike(q)}%`;
-
   const safeLimit = Math.max(1, Math.min(parseInt(limit, 10) || 20, 50));
 
+  if (normalizedPhone) {
+    return db.query(
+      `SELECT id, full_name, phone_number, visitor_type, code
+       FROM visitors
+       WHERE deleted_at IS NULL AND phone_number = ?
+       ORDER BY full_name ASC
+       LIMIT ${safeLimit}`,
+      [normalizedPhone]
+    );
+  }
+
+  const nameLike = `%${sanitizeLike(q)}%`;
   return db.query(
-    `SELECT id, full_name, phone_number, visitor_type, code,
-            CASE
-              WHEN code = ? THEN 0
-              WHEN phone_number = ? THEN 1
-              WHEN phone_number LIKE ? THEN 2
-              WHEN full_name LIKE ? THEN 3
-              ELSE 4
-            END AS priority
+    `SELECT id, full_name, phone_number, visitor_type, code
      FROM visitors
-     WHERE deleted_at IS NULL
-       AND (code = ? OR phone_number = ? OR phone_number LIKE ? OR full_name LIKE ?)
-     ORDER BY priority ASC, full_name ASC
+     WHERE deleted_at IS NULL AND (full_name LIKE ? OR code LIKE ?)
+     ORDER BY full_name ASC
      LIMIT ${safeLimit}`,
-    [q, normalizedPhone, phoneLike, nameLike, q, normalizedPhone, phoneLike, nameLike]
+    [nameLike, nameLike]
   );
 }
 
@@ -98,7 +134,7 @@ export async function listVisitorsPaged({ search = '', status = 'ACTIVE', visito
 }
 
 export async function findDuplicates({ fullName, phoneNumber, excludeId = null }) {
-  const phone = normalizePhone(phoneNumber);
+  const phone = normalizePhone(phoneNumber) || null;
   const nameLike = `%${sanitizeLike(fullName)}%`;
   const params = [phone, nameLike, fullName];
   const excludeSql = excludeId ? ' AND id <> ?' : '';
@@ -116,3 +152,5 @@ export async function findDuplicates({ fullName, phoneNumber, excludeId = null }
     params
   );
 }
+
+

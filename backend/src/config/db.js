@@ -17,5 +17,18 @@ export const db = {
   async query(sql, params = []) {
     const [rows] = await pool.execute(sql, params);
     return rows;
+  },
+  async queryWithTimeout(sql, params = [], timeoutMs = 5000) {
+    const conn = await pool.getConnection();
+    try {
+      const [rows] = await conn.execute({
+        sql,
+        values: params,
+        timeout: timeoutMs
+      });
+      return rows;
+    } finally {
+      conn.release();
+    }
   }
 };

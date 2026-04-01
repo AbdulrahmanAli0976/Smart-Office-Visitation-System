@@ -97,3 +97,50 @@ This log captures development actions and integrity checks performed on the syst
   - Implemented graceful shutdown handling for SIGTERM/SIGINT in \ackend/src/server.js\.
   - Upgraded \/health\ endpoint to perform real DB connectivity checks.
 
+
+## 2026-03-26 – Production Hardening Updates
+- Added centralized phone normalization utility: ackend/src/utils/normalizePhone.js (deterministic +234 normalization).
+- Removed 
+ormalizePhone from ackend/src/utils/validators.js and updated imports across services/routes.
+- Enforced phone normalization + invalid-phone guards before DB insert/update/search.
+- Updated visit/visitor services to use normalized phones for lookups and to skip invalid phone rows in bulk check-in.
+- Added log context injection and standardized log fields (requestId, route, userId).
+- Sentry integration completed: init, request context, user context, and error handler ordering.
+- Trust proxy hardened and rate limit key generator updated to user-aware keys.
+- Error handler route fallback to eq.safeRoute || req.originalUrl.
+
+
+## 2026-03-26 – Blocking Fixes Before Validation
+- Moved requestId middleware to the top of ackend/src/app.js to ensure JSON parse errors get requestId/route.
+- Verified admin user exists (ADMIN/ACTIVE) and password hash matches; login now returns 200 + token.
+- Created missing 	oken_blacklist table in live DB (token verification no longer fails after login).
+- Verified requestId now appears on error logs for JSON parse errors.
+
+\n## 2026-03-27 Progress\n- Implemented normalizePhone utility in backend/src/utils/normalizePhone.js; removed duplicate in validators; updated imports in visitor/visit services and routes.\n- Hardened visitorService: strict phone normalization, early validation, dedup by normalized phone, strict phone-only search when input is phone.\n- Updated visitService: active visit checks require time_out IS NULL; bulkCheckIn rolls back on active visit conflict and flags summary.conflict.\n- Updated visits.routes.js single check-in conflict message: 'Visitor already checked in' (409). Pending: ensure bulk conflict returns 409 with same message.\n- Reports dashboard now admin-only via requireRole('ADMIN').\n- RequestId middleware moved to top of app.js; safeRoute set; AsyncLocalStorage context used in logger; error handler uses req.safeRoute || req.originalUrl; Sentry initialized.\n- DB: token_blacklist table created with indexes.\n- Frontend: DashboardMetrics now hides pending officers unless isAdmin; App.jsx needs cleanup (remove literal \\n artifacts) and ensure refreshDashboard guard prevents non-admin calls.\n- Validation not yet run per blocker: must fix App.jsx + bulk conflict before runtime tests.\n
+\n## 2026-03-27 Logout Stability Fixes\n- Added global logout guard in frontend/src/api.js: isLoggingOut flag + setLoggingOut export; block requests during logout; 401 triggers auth logout event; blocked requests marked as auth-safe.\n- Updated frontend/src/App.jsx: logout now sets logging out flag, clears storage/state, navigates to /login, resets flag after 1s; ProtectedRoute enforced; handleAuthFailure ignores blocked/auth errors; login clears logging flag; auth event listener wired.\n- Added per-page token/user guards and request aborts to prevent API calls post-logout: frontend/src/pages/DashboardPage.jsx, VisitsPage.jsx, ReportsPage.jsx, AdminPage.jsx.\n- ErrorBoundary ignores auth errors (401/403 or isAuthError).\n
+## 2026-03-29 10:05:00 +01:00
+- Forensic logout trace instrumentation added: global error/unhandled promise handlers in frontend/src/main.jsx; API request/response/error tracing in frontend/src/api.js; logout trace + protected route trace in frontend/src/App.jsx; mount/unmount tracing in dashboard/visitors/visits/reports pages.
+- Rebuilt frontend container to include instrumentation.
+- Collected frontend runtime error: React error #31 (SyntheticEvent object rendered) during logout.
+- Fixed logout event leak: Logout button now calls onLogout via lambda in frontend/src/components/Sidebar.jsx; logout handler sanitizes object notes and uses safe message in frontend/src/App.jsx.
+- Verified by user: logout error resolved.
+- Cleaned instrumentation: removed temporary console.log traces (API_REQUEST_START/RESPONSE, LOGOUT_CLICKED, MOUNT/UNMOUNT, protected route logs) while keeping global error handlers and console.error.
+
+## 2026-03-29 10:35:00 +01:00
+- UX feedback system implemented:
+  - Visitors search debounced (400ms) and empty-state messaging updated with styled guidance.
+  - Visits search debounced (400ms) and empty-state messaging updated with styled guidance.
+  - Added toast errors for validation + auth guard failures in Visitors/Visits.
+  - Added toast success for visit check-in/out, bulk check-in, visitor history load, and admin actions (approve/deactivate/delete).
+  - Added styled empty state for admin officers list.
+- Fixed accidental literal "\\n" artifacts in modified JSX files.
+- Rebuilt frontend container; initial build failed due to stray "\\n" token in frontend/src/api.js, then fixed and rebuild succeeded.
+
+## 2026-03-29 10:55:00 +01:00
+- System state awareness layer added:
+  - API failure tracking in frontend/src/api.js with system:error / system:clear events after repeated failures.
+  - Global banner in frontend/src/App.jsx for offline state and server-unreachable errors.
+  - Offline detection via online/offline events.
+  - Session-expired message standardized to "Session expired. Please login again." before redirect.
+  - Added confirmation dialog for destructive admin actions (deactivate/delete).
+- Created .env.development and .env.production with placeholder production secrets and safe defaults.

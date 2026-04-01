@@ -1,9 +1,16 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 export default function AuthPanel({ onLogin, onRegister, loading, error, message }) {
   const [mode, setMode] = useState('login');
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [registerForm, setRegisterForm] = useState({ full_name: '', email: '', password: '' });
+  const noticeRef = useRef(null);
+
+  useEffect(() => {
+    if ((error || message) && noticeRef.current) {
+      noticeRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [error, message]);
 
   const handleLogin = (event) => {
     event.preventDefault();
@@ -97,7 +104,10 @@ export default function AuthPanel({ onLogin, onRegister, loading, error, message
       )}
 
       {(error || message) && (
-        <div className={`rounded-xl px-4 py-2 text-sm ${error ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+        <div
+          ref={noticeRef}
+          className={`rounded-xl px-4 py-2 text-sm ${error ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}
+        >
           {error || message}
         </div>
       )}

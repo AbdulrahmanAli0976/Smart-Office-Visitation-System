@@ -32,3 +32,11 @@ Docker, CI, and System Hardening complete. System is operationally stable and re
 
 ### Last Updated
 2026-03-22
+
+## 2026-03-29 Updates
+- Logout error fixed (React error #31): logout now uses safe handler and Sidebar triggers logout via lambda to avoid SyntheticEvent leakage.
+- Added global error/unhandled promise handlers, then removed debug tracing logs after confirmation.
+- UX feedback improvements: debounced searches, styled empty states, toast feedback for errors and successes.
+- System state awareness: offline + server-unreachable banner; API failure tracking with system events; session-expired message standardized; admin destructive action confirmations.
+- Added .env.development and .env.production with placeholder production secrets.
+

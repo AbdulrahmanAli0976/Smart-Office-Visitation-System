@@ -1,19 +1,113 @@
+import { toast } from 'react-hot-toast';
+
+let isLoggingOut = false;
+let failureCount = 0;
+let lastFailureAt = 0;
+const FAILURE_WINDOW_MS = 30000;
+const FAILURE_THRESHOLD = 3;
+
+export function setLoggingOut(value) {
+  isLoggingOut = value;
+}
+
+function dispatchSystemError(message) {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('system:error', { detail: { message } }));
+  }
+}
+
+function clearSystemError() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('system:clear'));
+  }
+}
+
+function recordFailure(message) {
+  const now = Date.now();
+  if (now - lastFailureAt > FAILURE_WINDOW_MS) {
+    failureCount = 0;
+  }
+  failureCount += 1;
+  lastFailureAt = now;
+  if (failureCount >= FAILURE_THRESHOLD) {
+    dispatchSystemError(message || 'Server unreachable. Please check connection.');
+  }
+}
+
+function recordSuccess() {
+  if (failureCount > 0) {
+    failureCount = 0;
+    clearSystemError();
+  }
+}
+
+function createBlockedError() {
+  const err = new Error('Request blocked during logout');
+  err.isAuthError = true;
+  return err;
+}
+
+function assertNotLoggingOut() {
+  if (isLoggingOut) {
+    throw createBlockedError();
+  }
+}
+
 const API_BASE = import.meta.env.VITE_API_BASE || 'http://localhost:4000/api';
 
-async function request(path, { method = 'GET', body, token } = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    },
-    body: body ? JSON.stringify(body) : undefined
-  });
+function fireAuthLogout(reason) {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('auth:logout', { detail: { reason } }));
+  }
+}
+
+async function request(path, { method = 'GET', body, token, signal } = {}) {
+  assertNotLoggingOut();
+  const url = `${API_BASE}${path}`;
+  let res;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      signal
+    });
+  } catch (error) {
+    recordFailure('Server unreachable. Please check connection.');
+    console.error('API_ERROR', {
+      url,
+      message: error.message,
+      stack: error.stack
+    });
+    throw error;
+  }
+
+  if (res.status >= 500) {
+    recordFailure('Server unreachable. Please check connection.');
+  } else {
+    recordSuccess();
+  }
 
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    const error = data?.error || 'Unauthorized';
+    toast.error(error);
+    fireAuthLogout(error);
+    const err = new Error(error);
+    err.status = 401;
+    err.isAuthError = true;
+    throw err;
+  }
+
   if (!res.ok || data?.success === false) {
     const error = data?.error || 'Request failed';
-    throw new Error(error);
+    toast.error(error);
+    const err = new Error(error);
+    err.status = res.status;
+    throw err;
   }
   if (data && Object.prototype.hasOwnProperty.call(data, 'data')) {
     return data.data;
@@ -21,20 +115,53 @@ async function request(path, { method = 'GET', body, token } = {}) {
   return data;
 }
 
-async function requestWithPagination(path, { method = 'GET', body, token } = {}) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {})
-    },
-    body: body ? JSON.stringify(body) : undefined
-  });
+async function requestWithPagination(path, { method = 'GET', body, token, signal } = {}) {
+  assertNotLoggingOut();
+  const url = `${API_BASE}${path}`;
+  let res;
+  try {
+    res = await fetch(url, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {})
+      },
+      body: body ? JSON.stringify(body) : undefined,
+      signal
+    });
+  } catch (error) {
+    recordFailure('Server unreachable. Please check connection.');
+    console.error('API_ERROR', {
+      url,
+      message: error.message,
+      stack: error.stack
+    });
+    throw error;
+  }
+
+  if (res.status >= 500) {
+    recordFailure('Server unreachable. Please check connection.');
+  } else {
+    recordSuccess();
+  }
 
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401) {
+    const error = data?.error || 'Unauthorized';
+    toast.error(error);
+    fireAuthLogout(error);
+    const err = new Error(error);
+    err.status = 401;
+    err.isAuthError = true;
+    throw err;
+  }
+
   if (!res.ok || data?.success === false) {
     const error = data?.error || 'Request failed';
-    throw new Error(error);
+    toast.error(error);
+    const err = new Error(error);
+    err.status = res.status;
+    throw err;
   }
 
   const rows = data?.data || [];
@@ -62,7 +189,7 @@ export const api = {
   register(payload) {
     return request('/auth/register', { method: 'POST', body: payload });
   },
-  listVisitors(params = {}, token) {
+  listVisitors(params = {}, token, options = {}) {
     const qs = new URLSearchParams();
     if (params.search) qs.set('search', params.search);
     if (params.status) qs.set('status', params.status);
@@ -70,19 +197,19 @@ export const api = {
     if (params.page) qs.set('page', params.page);
     if (params.limit) qs.set('limit', params.limit);
     const suffix = qs.toString();
-    return requestWithPagination(`/visitors${suffix ? `?${suffix}` : ''}`, { token });
+    return requestWithPagination(`/visitors${suffix ? `?${suffix}` : ''}`, { token, signal: options.signal });
   },
-  searchVisitors(q, token) {
+  searchVisitors(q, token, options = {}) {
     const params = new URLSearchParams({ q });
-    return request(`/visitors/search?${params.toString()}`, { token });
+    return request(`/visitors/search?${params.toString()}`, { token, signal: options.signal });
   },
-  getVisitorHistory(visitorId, token) {
-    return request(`/visitors/${visitorId}/history`, { token });
+  getVisitorHistory(visitorId, token, options = {}) {
+    return request(`/visitors/${visitorId}/history`, { token, signal: options.signal });
   },
-  getActiveVisits(token) {
-    return request('/visits/active', { token });
+  getActiveVisits(token, options = {}) {
+    return request('/visits/active', { token, signal: options.signal });
   },
-  getVisitHistory(params = {}, token) {
+  getVisitHistory(params = {}, token, options = {}) {
     const qs = new URLSearchParams();
     if (params.from) qs.set('from', params.from);
     if (params.to) qs.set('to', params.to);
@@ -96,9 +223,10 @@ export const api = {
     if (params.page) qs.set('page', params.page);
     if (params.limit) qs.set('limit', params.limit);
     const suffix = qs.toString();
-    return requestWithPagination(`/visits${suffix ? `?${suffix}` : ''}`, { token });
+    return requestWithPagination(`/visits${suffix ? `?${suffix}` : ''}`, { token, signal: options.signal });
   },
-  exportVisits(params = {}, token) {
+  async exportVisits(params = {}, token) {
+    assertNotLoggingOut();
     const qs = new URLSearchParams();
     if (params.from) qs.set('from', params.from);
     if (params.to) qs.set('to', params.to);
@@ -106,17 +234,49 @@ export const api = {
     if (params.officer_id) qs.set('officer_id', params.officer_id);
     qs.set('format', 'csv');
     const suffix = qs.toString();
-    return fetch(`${API_BASE}/visits/export?${suffix}`, {
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      }
-    }).then(async (res) => {
-      const text = await res.text();
-      if (!res.ok) {
-        throw new Error('Export failed');
-      }
-      return text;
-    });
+    const url = `${API_BASE}/visits/export?${suffix}`;
+
+    let res;
+    try {
+      res = await fetch(url, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {})
+        }
+      });
+    } catch (error) {
+      recordFailure('Server unreachable. Please check connection.');
+      console.error('API_ERROR', {
+        url,
+        message: error.message,
+        stack: error.stack
+      });
+      throw error;
+    }
+
+    if (res.status >= 500) {
+      recordFailure('Server unreachable. Please check connection.');
+    } else {
+      recordSuccess();
+    }
+
+    const text = await res.text();
+    if (res.status === 401) {
+      const error = 'Unauthorized';
+      toast.error(error);
+      fireAuthLogout(error);
+      const err = new Error(error);
+      err.status = 401;
+      err.isAuthError = true;
+      throw err;
+    }
+    if (!res.ok) {
+      const error = 'Export failed';
+      toast.error(error);
+      const err = new Error(error);
+      err.status = res.status;
+      throw err;
+    }
+    return text;
   },
   checkIn(payload, token) {
     return request('/visits/checkin', { method: 'POST', body: payload, token });
@@ -130,38 +290,38 @@ export const api = {
   bulkCheckOut(payload, token) {
     return request('/visits/bulk-checkout', { method: 'POST', body: payload, token });
   },
-  getSummaryReport(params = {}, token) {
+  getSummaryReport(params = {}, token, options = {}) {
     const qs = new URLSearchParams();
     if (params.from) qs.set('from', params.from);
     if (params.to) qs.set('to', params.to);
     const suffix = qs.toString();
-    return request(`/reports/summary${suffix ? `?${suffix}` : ''}`, { token });
+    return request(`/reports/summary${suffix ? `?${suffix}` : ''}`, { token, signal: options.signal });
   },
-  getDashboardMetrics(token) {
-    return request('/reports/dashboard', { token });
+  getDashboardMetrics(token, options = {}) {
+    return request('/reports/dashboard', { token, signal: options.signal });
   },
-  getVisitorsPerDay(params = {}, token) {
+  getVisitorsPerDay(params = {}, token, options = {}) {
     const qs = new URLSearchParams();
     if (params.from) qs.set('from', params.from);
     if (params.to) qs.set('to', params.to);
     const suffix = qs.toString();
-    return request(`/reports/visitors-per-day${suffix ? `?${suffix}` : ''}`, { token });
+    return request(`/reports/visitors-per-day${suffix ? `?${suffix}` : ''}`, { token, signal: options.signal });
   },
-  getVisitorTypeDistribution(params = {}, token) {
+  getVisitorTypeDistribution(params = {}, token, options = {}) {
     const qs = new URLSearchParams();
     if (params.from) qs.set('from', params.from);
     if (params.to) qs.set('to', params.to);
     const suffix = qs.toString();
-    return request(`/reports/visitor-types${suffix ? `?${suffix}` : ''}`, { token });
+    return request(`/reports/visitor-types${suffix ? `?${suffix}` : ''}`, { token, signal: options.signal });
   },
-  getOfficers(params = {}, token) {
+  getOfficers(params = {}, token, options = {}) {
     const qs = new URLSearchParams();
     if (params.search) qs.set('search', params.search);
     if (params.status) qs.set('status', params.status);
     if (params.page) qs.set('page', params.page);
     if (params.limit) qs.set('limit', params.limit);
     const suffix = qs.toString();
-    return requestWithPagination(`/admin/officers${suffix ? `?${suffix}` : ''}`, { token });
+    return requestWithPagination(`/admin/officers${suffix ? `?${suffix}` : ''}`, { token, signal: options.signal });
   },
   approveOfficer(id, token) {
     return request(`/admin/officers/${id}/approve`, { method: 'PUT', token });

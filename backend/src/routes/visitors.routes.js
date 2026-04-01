@@ -1,5 +1,5 @@
-import express from 'express';
-import { requireAuth } from '../middleware/auth.js';
+﻿import express from 'express';
+import { requireAuth, requireActiveOfficer } from '../middleware/auth.js';
 import {
   createVisitor,
   updateVisitor,
@@ -9,10 +9,15 @@ import {
   findDuplicates
 } from '../services/visitorService.js';
 import { listVisitorHistory } from '../services/visitService.js';
-import { isNonEmptyString } from '../utils/validators.js';
+import { normalizePhone } from '../utils/normalizePhone.js';
+import { isNonEmptyString, sanitizeText, isSafeString } from '../utils/validators.js';
 import { ok, fail } from '../utils/response.js';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
+
+// All visitor data access requires an active officer or admin
+router.use(requireAuth, requireActiveOfficer);
 
 const CODE_REQUIRED_TYPES = new Set(['BD', 'MS', 'AGG']);
 const NO_CODE_TYPES = new Set(['AGENT_MERCHANT']);
@@ -42,27 +47,37 @@ function normalizeVisitorType(value) {
   return VISITOR_TYPE_ALIASES[key] || '';
 }
 
-function validateVisitor({ full_name, phone_number, visitor_type, code }) {
-  if (!isNonEmptyString(full_name) || !isNonEmptyString(phone_number) || !isNonEmptyString(visitor_type)) {
-    return 'Missing required visitor fields';
+function validateVisitor(visitor) {
+  const fullName = sanitizeText(visitor.full_name);
+  const phoneNumber = normalizePhone(visitor.phone_number);
+  const visitorType = normalizeVisitorType(visitor.visitor_type);
+  const code = sanitizeText(visitor.code);
+
+  if (!isSafeString(fullName, 120) || !phoneNumber || !visitorType) {
+    return 'Missing or invalid required visitor fields';
   }
 
-  if (!VISITOR_TYPES.has(visitor_type)) {
+  if (!VISITOR_TYPES.has(visitorType)) {
     return 'Invalid visitor type';
   }
 
-  if (CODE_REQUIRED_TYPES.has(visitor_type) && !isNonEmptyString(code)) {
+  if (CODE_REQUIRED_TYPES.has(visitorType) && !isSafeString(code, 50)) {
     return 'Code is required for this visitor type';
   }
 
-  if (NO_CODE_TYPES.has(visitor_type) && isNonEmptyString(code)) {
+  if (NO_CODE_TYPES.has(visitorType) && isNonEmptyString(code)) {
     return 'Code must be empty for Agent/Merchant';
   }
+
+  visitor.full_name = fullName;
+  visitor.phone_number = phoneNumber;
+  visitor.visitor_type = visitorType;
+  visitor.code = code || null;
 
   return null;
 }
 
-router.get('/', requireAuth, async (req, res, next) => {
+router.get('/', async (req, res, next) => {
   try {
     const { page, limit, offset } = parsePagination(req.query || {});
     const search = req.query?.search || '';
@@ -80,7 +95,7 @@ router.get('/', requireAuth, async (req, res, next) => {
     }
 
     const { rows, total } = await listVisitorsPaged({
-      search,
+      search: sanitizeText(search),
       status: normalizedStatus || 'ACTIVE',
       visitorType: visitorType || null,
       limit,
@@ -95,12 +110,6 @@ router.get('/', requireAuth, async (req, res, next) => {
         limit,
         total,
         totalPages: Math.ceil(total / limit)
-      },
-      meta: {
-        page,
-        limit,
-        total,
-        pages: Math.ceil(total / limit)
       }
     });
   } catch (err) {
@@ -108,87 +117,82 @@ router.get('/', requireAuth, async (req, res, next) => {
   }
 });
 
-router.get('/search', requireAuth, async (req, res, next) => {
+router.get('/search', async (req, res, next) => {
   try {
     const { q } = req.query;
-    const results = await searchVisitors(q, 20);
+    const results = await searchVisitors(sanitizeText(q), 20);
     return ok(res, results);
   } catch (err) {
     return next(err);
   }
 });
 
-router.post('/', requireAuth, async (req, res, next) => {
+router.post('/', async (req, res, next) => {
+  const userId = req.user?.id;
   try {
-    const { full_name, phone_number, visitor_type, code } = req.body || {};
-    const error = validateVisitor({ full_name, phone_number, visitor_type, code });
+    const visitorData = { ...req.body };
+    const error = validateVisitor(visitorData);
     if (error) {
       return fail(res, error, 400);
     }
 
-    const duplicates = await findDuplicates({
-      fullName: full_name.trim(),
-      phoneNumber: phone_number
-    });
-
     const id = await createVisitor({
-      fullName: full_name.trim(),
-      phoneNumber: phone_number,
-      visitorType: visitor_type,
-      code: code
+      fullName: visitorData.full_name,
+      phoneNumber: visitorData.phone_number,
+      visitorType: visitorData.visitor_type,
+      code: visitorData.code
     });
 
+    logger.info('visitors.create_success', { operation: 'CREATE_VISITOR', userId, visitorId: id });
     const visitor = await findVisitorById(id);
-    return ok(res, { visitor, duplicates }, 201);
+    return ok(res, visitor, 201);
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY') {
       return fail(res, 'Visitor code must be unique', 409);
     }
+    logger.error('visitors.create_failed', { operation: 'CREATE_VISITOR', userId, error: err.message });
     return next(err);
   }
 });
 
-router.put('/:id', requireAuth, async (req, res, next) => {
+router.put('/:id', async (req, res, next) => {
+  const userId = req.user?.id;
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) {
       return fail(res, 'Invalid visitor id', 400);
     }
 
-    const { full_name, phone_number, visitor_type, code } = req.body || {};
-    const error = validateVisitor({ full_name, phone_number, visitor_type, code });
+    const visitorData = { ...req.body };
+    const error = validateVisitor(visitorData);
     if (error) {
       return fail(res, error, 400);
     }
 
-    const duplicates = await findDuplicates({
-      fullName: full_name.trim(),
-      phoneNumber: phone_number,
-      excludeId: id
-    });
-
     const updated = await updateVisitor(id, {
-      fullName: full_name.trim(),
-      phoneNumber: phone_number,
-      visitorType: visitor_type,
-      code: code
+      fullName: visitorData.full_name,
+      phoneNumber: visitorData.phone_number,
+      visitorType: visitorData.visitor_type,
+      code: visitorData.code
     });
 
     if (!updated) {
       return fail(res, 'Visitor not found', 404);
     }
 
+    logger.info('visitors.update_success', { operation: 'UPDATE_VISITOR', userId, visitorId: id });
     const visitor = await findVisitorById(id);
-    return ok(res, { visitor, duplicates });
+    return ok(res, visitor);
   } catch (err) {
     if (err.code === 'ER_DUP_ENTRY') {
       return fail(res, 'Visitor code must be unique', 409);
     }
+    logger.error('visitors.update_failed', { operation: 'UPDATE_VISITOR', userId, error: err.message, visitorId: req.params.id });
     return next(err);
   }
 });
 
-router.get('/:id', requireAuth, async (req, res, next) => {
+router.get('/:id', async (req, res, next) => {
   try {
     const visitor = await findVisitorById(req.params.id);
     if (!visitor) {
@@ -200,7 +204,7 @@ router.get('/:id', requireAuth, async (req, res, next) => {
   }
 });
 
-router.get('/:id/history', requireAuth, async (req, res, next) => {
+router.get('/:id/history', async (req, res, next) => {
   try {
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) {

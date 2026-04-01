@@ -6,13 +6,16 @@ function formatPeak(peak) {
   return `${hour}:00 - ${hour}:59 (${peak.visits})`;
 }
 
-export default function DashboardMetrics({ metrics, loading }) {
+export default function DashboardMetrics({ metrics, loading, isAdmin }) {
   const items = [
     { label: 'Total visitors today', value: metrics?.visitors_today ?? 'N/A' },
     { label: 'Active visits', value: metrics?.active_visitors_now ?? 'N/A' },
-    { label: 'Completed visits', value: metrics?.completed_today ?? 'N/A' },
-    { label: 'Pending officers', value: metrics?.pending_officers ?? 'N/A' }
+    { label: 'Completed visits', value: metrics?.completed_today ?? 'N/A' }
   ];
+
+  if (isAdmin) {
+    items.push({ label: 'Pending officers', value: metrics?.pending_officers ?? 'N/A' });
+  }
 
   return (
     <section className="clay-card p-5 space-y-4">
