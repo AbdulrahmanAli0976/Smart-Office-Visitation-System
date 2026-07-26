@@ -6,6 +6,16 @@ export function isNonEmptyString(value) {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
+export function isStrongPassword(value) {
+  if (typeof value !== 'string') return false;
+  const password = value.trim();
+  return password.length >= 12 &&
+    /[a-z]/.test(password) &&
+    /[A-Z]/.test(password) &&
+    /\d/.test(password) &&
+    /[^A-Za-z0-9]/.test(password);
+}
+
 /**
  * Basic text sanitization and length enforcement
  * @param {any} value 

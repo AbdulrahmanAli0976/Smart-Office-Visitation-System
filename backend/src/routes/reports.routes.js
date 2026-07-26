@@ -1,5 +1,6 @@
 ﻿import express from 'express';
 import { requireAuth, requireActiveOfficer, requireRole } from '../middleware/auth.js';
+import { ADMIN_ROLES } from '../config/roles.js';
 import { getSummary, getDashboardMetrics, getVisitorsPerDay, getVisitorTypeDistribution } from '../services/reportService.js';
 import { ok, fail } from '../utils/response.js';
 
@@ -27,7 +28,7 @@ router.get('/summary', async (req, res, next) => {
   }
 });
 
-router.get('/dashboard', requireRole('ADMIN'), async (req, res, next) => {
+router.get('/dashboard', requireRole(...Array.from(ADMIN_ROLES)), async (req, res, next) => {
   try {
     const metrics = await getDashboardMetrics();
     return ok(res, metrics);

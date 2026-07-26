@@ -1,10 +1,7 @@
-version: '3.9'
-
 services:
   db:
     image: mysql:8.0
     restart: always
-    env_file: .env.production
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
       MYSQL_DATABASE: ${DB_NAME}
@@ -15,7 +12,7 @@ services:
       - db_data:/var/lib/mysql
       - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -24,7 +21,26 @@ services:
     build:
       context: ./backend
     restart: always
-    env_file: .env.production
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-900000}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-300}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      HTTP_LOG_FORMAT: ${HTTP_LOG_FORMAT:-combined}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      DEBUG_ROUTES_ENABLED: ${DEBUG_ROUTES_ENABLED:-false}
+      DB_CONNECT_RETRIES: ${DB_CONNECT_RETRIES:-15}
+      DB_CONNECT_DELAY_MS: ${DB_CONNECT_DELAY_MS:-2000}
+      TZ: ${TZ:-UTC}
     depends_on:
       db:
         condition: service_healthy
@@ -33,7 +49,7 @@ services:
     volumes:
       - backend_logs:/app/logs
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4000/api/health"]
+      test: ["CMD-SHELL", "node -e \"fetch('http://localhost:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -45,14 +61,13 @@ services:
       args:
         VITE_API_BASE: ${VITE_API_BASE:-/api}
     restart: always
-    env_file: .env.production
     depends_on:
       backend:
         condition: service_healthy
     ports:
       - "8080:80"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:80"]
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null 2>&1"]
       interval: 30s
       timeout: 10s
       retries: 3

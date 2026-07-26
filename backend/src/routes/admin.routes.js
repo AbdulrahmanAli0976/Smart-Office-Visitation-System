@@ -1,6 +1,8 @@
 ﻿import express from 'express';
 import { listOfficers, listOfficersPaged, updateOfficerStatus, deleteOfficer } from '../services/userService.js';
 import { requireAuth, requireRole, requireActiveOfficer } from '../middleware/auth.js';
+import { recordAuditEvent } from '../services/auditService.js';
+import { ADMIN_ROLES } from '../config/roles.js';
 import { ok, fail } from '../utils/response.js';
 import { logger } from '../utils/logger.js';
 
@@ -15,7 +17,7 @@ function parsePagination(query) {
   return { page, limit, offset };
 }
 
-router.use(requireAuth, requireActiveOfficer, requireRole('ADMIN'));
+router.use(requireAuth, requireActiveOfficer, requireRole(...Array.from(ADMIN_ROLES)));
 
 router.get('/officers', async (req, res, next) => {
   try {
@@ -59,6 +61,14 @@ router.put('/officers/:id/approve', async (req, res, next) => {
       return fail(res, 'Officer not found', 404);
     }
     logger.info('admin.approve_officer_success', { operation: 'APPROVE_OFFICER', adminId, targetUserId: id });
+    await recordAuditEvent({
+      userId: adminId,
+      eventType: 'admin.approve_officer',
+      resourceType: 'user',
+      resourceId: id,
+      details: { targetStatus: 'ACTIVE' },
+      ipAddress: req.ip
+    });
     return ok(res, { status: 'ACTIVE' });
   } catch (err) {
     logger.error('admin.approve_officer_failed', { operation: 'APPROVE_OFFICER', adminId, error: err.message });
@@ -76,6 +86,14 @@ router.put('/officers/:id/deactivate', async (req, res, next) => {
       return fail(res, 'Officer not found', 404);
     }
     logger.info('admin.deactivate_officer_success', { operation: 'DEACTIVATE_OFFICER', adminId, targetUserId: id });
+    await recordAuditEvent({
+      userId: adminId,
+      eventType: 'admin.deactivate_officer',
+      resourceType: 'user',
+      resourceId: id,
+      details: { targetStatus: 'INACTIVE' },
+      ipAddress: req.ip
+    });
     return ok(res, { status: 'INACTIVE' });
   } catch (err) {
     logger.error('admin.deactivate_officer_failed', { operation: 'DEACTIVATE_OFFICER', adminId, error: err.message });
@@ -93,6 +111,14 @@ router.delete('/officers/:id', async (req, res, next) => {
       return fail(res, 'Officer not found', 404);
     }
     logger.info('admin.delete_officer_success', { operation: 'DELETE_OFFICER', adminId, targetUserId: id });
+    await recordAuditEvent({
+      userId: adminId,
+      eventType: 'admin.delete_officer',
+      resourceType: 'user',
+      resourceId: id,
+      details: { deleted: true },
+      ipAddress: req.ip
+    });
     return ok(res, { deleted: true });
   } catch (err) {
     logger.error('admin.delete_officer_failed', { operation: 'DELETE_OFFICER', adminId, error: err.message });

@@ -1,31 +1,35 @@
 import bcrypt from 'bcryptjs';
 import { db } from '../config/db.js';
 import { sanitizeLike } from '../utils/validators.js';
+import { USER_ROLES, OFFICER_ROLE_FILTER } from '../config/roles.js';
 
 export async function createOfficer({ fullName, email, password }) {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
   const passwordHash = await bcrypt.hash(password, 12);
   const result = await db.query(
     `INSERT INTO users (full_name, email, password_hash, role, status)
-     VALUES (?, ?, ?, 'OFFICER', 'PENDING')`,
-    [fullName, email, passwordHash]
+     VALUES (?, ?, ?, ?, 'PENDING')`,
+    [fullName, normalizedEmail, passwordHash, USER_ROLES.OFFICER]
   );
   return result.insertId;
 }
 
 export async function createAdmin({ fullName, email, password }) {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
   const passwordHash = await bcrypt.hash(password, 12);
   const result = await db.query(
     `INSERT INTO users (full_name, email, password_hash, role, status)
-     VALUES (?, ?, ?, 'ADMIN', 'ACTIVE')`,
-    [fullName, email, passwordHash]
+     VALUES (?, ?, ?, ?, 'ACTIVE')`,
+    [fullName, normalizedEmail, passwordHash, USER_ROLES.ADMIN]
   );
   return result.insertId;
 }
 
 export async function findUserByEmail(email) {
+  const normalizedEmail = String(email || '').trim().toLowerCase();
   const rows = await db.query(
     'SELECT id, full_name, email, password_hash, role, status FROM users WHERE email = ?',
-    [email]
+    [normalizedEmail]
   );
   return rows[0] || null;
 }
@@ -41,7 +45,7 @@ export async function findUserById(id) {
 export async function listOfficersPaged({ search = '', status = '', limit = 10, offset = 0 }) {
   const conn = await db.pool.getConnection();
   try {
-    const filters = ["role = 'OFFICER'"];
+    const filters = [OFFICER_ROLE_FILTER];
     const params = [];
 
     const trimmed = String(search || '').trim();
@@ -77,14 +81,14 @@ export async function listOfficers() {
   return db.query(
     `SELECT id, full_name, email, role, status, created_at, updated_at
      FROM users
-     WHERE role = 'OFFICER'
+     WHERE ${OFFICER_ROLE_FILTER}
      ORDER BY created_at DESC`
   );
 }
 
 export async function updateOfficerStatus(id, status) {
   const result = await db.query(
-    'UPDATE users SET status = ?, updated_at = NOW() WHERE id = ? AND role = "OFFICER"',
+    `UPDATE users SET status = ?, updated_at = NOW() WHERE id = ? AND ${OFFICER_ROLE_FILTER}`,
     [status, id]
   );
   return result.affectedRows;
@@ -92,7 +96,7 @@ export async function updateOfficerStatus(id, status) {
 
 export async function deleteOfficer(id) {
   const result = await db.query(
-    'DELETE FROM users WHERE id = ? AND role = "OFFICER"',
+    `DELETE FROM users WHERE id = ? AND ${OFFICER_ROLE_FILTER}`,
     [id]
   );
   return result.affectedRows;

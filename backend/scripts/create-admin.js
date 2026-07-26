@@ -1,25 +1,30 @@
 import bcrypt from 'bcryptjs';
 import { db } from '../src/config/db.js';
 
-const fullName = process.argv[2] || process.env.ADMIN_NAME;
-const email = (process.argv[3] || process.env.ADMIN_EMAIL || '').trim().toLowerCase();
-const password = process.argv[4] || process.env.ADMIN_PASSWORD;
+const cliName = process.argv[2];
+const cliEmail = process.argv[3];
+const cliPassword = process.argv[4];
+
+const adminName = cliName || process.env.ADMIN_NAME;
+const adminEmail = (cliEmail || process.env.ADMIN_EMAIL || '').trim().toLowerCase();
+const adminPassword = cliPassword || process.env.ADMIN_PASSWORD;
 const allowAdditionalAdmin = String(process.env.ALLOW_ADDITIONAL_ADMIN || '').toLowerCase() === 'true';
 
-if (!fullName || !email || !password) {
-  console.error('Missing admin details. Usage: node scripts/seed-admin.js "Admin Name" admin@example.com StrongPassword123!');
+if (!adminName || !adminEmail || !adminPassword) {
+  console.error('Missing ADMIN_NAME, ADMIN_EMAIL, or ADMIN_PASSWORD');
   process.exit(1);
 }
 
-async function seed() {
+async function createAdmin() {
   const conn = await db.pool.getConnection();
   try {
     await conn.beginTransaction();
 
-    const passwordHash = await bcrypt.hash(password, 12);
+    const passwordHash = await bcrypt.hash(adminPassword, 12);
+
     const [existingUsers] = await conn.execute(
       'SELECT id, email, role, status FROM users WHERE email = ? FOR UPDATE',
-      [email]
+      [adminEmail]
     );
 
     if (existingUsers.length) {
@@ -28,7 +33,7 @@ async function seed() {
         `UPDATE users
          SET full_name = ?, password_hash = ?, role = 'ADMIN', status = 'ACTIVE'
          WHERE id = ?`,
-        [fullName, passwordHash, existing.id]
+        [adminName, passwordHash, existing.id]
       );
 
       await conn.commit();
@@ -54,7 +59,7 @@ async function seed() {
     const [result] = await conn.execute(
       `INSERT INTO users (full_name, email, password_hash, role, status)
        VALUES (?, ?, ?, 'ADMIN', 'ACTIVE')`,
-      [fullName, email, passwordHash]
+      [adminName, adminEmail, passwordHash]
     );
 
     await conn.commit();
@@ -69,4 +74,4 @@ async function seed() {
   }
 }
 
-seed();
+createAdmin();

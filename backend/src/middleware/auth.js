@@ -5,14 +5,8 @@ import { findUserById } from '../services/userService.js';
 import { isTokenBlacklisted } from '../services/authService.js';
 import { fail } from '../utils/response.js';
 import { logStorage } from '../utils/logger.js';
-
-function normalizeRole(role) {
-  return typeof role === 'string' ? role.trim().toUpperCase() : '';
-}
-
-function normalizeStatus(status) {
-  return typeof status === 'string' ? status.trim().toUpperCase() : '';
-}
+import { normalizeRole, normalizeStatus } from '../utils/roleUtils.js';
+import { ATTENDANCE_ROLES } from '../config/roles.js';
 
 export async function requireAuth(req, res, next) {
   const header = req.headers.authorization || '';
@@ -96,15 +90,11 @@ export async function requireActiveOfficer(req, res, next) {
       return fail(res, 'User account is not active', 403);
     }
 
-    if (resolvedRole === 'ADMIN') {
+    if (ATTENDANCE_ROLES.has(resolvedRole)) {
       return next();
     }
 
-    if (resolvedRole !== 'OFFICER') {
-      return fail(res, 'Only officers can perform this action', 403);
-    }
-
-    return next();
+    return fail(res, 'Only active attendance staff may perform this action', 403);
   } catch (err) {
     return next(err);
   }

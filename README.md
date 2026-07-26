@@ -1,35 +1,63 @@
-# Visitor Management System
+# Smart Attendance System
 
 ## Overview
-Production-ready Visitor Management System with role-based access, smart search, and visit tracking.
 
-## Structure
-- `backend/` Node.js (Express) API
-- `frontend/` React + Tailwind UI
-- `database/schema.sql` MySQL schema
+Smart Attendance System is an enterprise-grade visitor management platform with role-based access control, audit logging, visitor tracking, and reporting.
 
-## Quick Start
-1. Create the database and tables:
-   - Run `database/schema.sql` in MySQL.
+## Repository Structure
+
+- `backend/` — Node.js Express API
+- `frontend/` — React + Vite + Tailwind UI
+- `database/` — MySQL schema and migrations
+- `docs/` — Supporting documentation and archives
+- `ops/` — Operational scripts and deployment validation
+
+## Key Release Documents
+
+- `CHANGELOG.md` — Release history
+- `VERSION` — Current release version
+- `LICENSE` — License terms
+- `SECURITY.md` — Security policy
+- `CONTRIBUTING.md` — Contribution guidelines
+- `RELEASE_NOTES.md` — v1.0.0 release summary
+- `DEPLOYMENT_GUIDE.md` — Deployment instructions
+- `ARCHITECTURE.md` — System architecture overview
+
+## Quick Start (Docker)
+
+1. Copy `.env.docker.example` to `.env` and configure values.
+2. Run:
+   - `docker compose up -d --build`
+3. Access:
+   - Frontend: `http://localhost:8080`
+   - Backend API: `http://localhost:4000`
+4. Stop services:
+   - `docker compose down`
+
+## Local Development
+
+1. Copy `.env.example` to `.env` and configure backend values.
 2. Backend:
-   - Copy `backend/.env.example` to `backend/.env` and update values.
-   - Install dependencies and start the API:
-     - `npm install`
-     - `npm run dev`
-3. Seed an admin user:
-   - `node scripts/seed-admin.js "Admin Name" admin@example.com StrongPassword123!`
-4. Frontend:
-   - Copy `frontend/.env.example` to `frontend/.env` if needed.
-   - Install dependencies and start the UI:
-     - `npm install`
-     - `npm run dev`
+   - `cd backend`
+   - `npm install`
+   - `npm run dev`
+3. Frontend:
+   - `cd frontend`
+   - `npm install`
+   - `npm run dev`
 
-## Docker Quick Start
-1. Copy `.env.docker.example` to `.env` and update values.
-2. Run `docker compose up -d --build`.
-3. Open `http://localhost:8080`.
-4. Stop with `docker compose down`.
+## Documentation
+
+For full documentation, see the `docs/` folder:
+- `docs/OVERVIEW.md`
+- `docs/API_REFERENCE.md`
+- `docs/DATABASE.md`
+- `docs/PROJECT_STRUCTURE.md`
+- `docs/RBAC.md`
+- `docs/TEST_REPORT.md`
 
 ## Notes
-- Officers register via `/api/auth/register` and must be approved by admin.
-- Only ACTIVE officers can log in and use the system.
+
+- Environment secrets must be managed outside source control.
+- Use `.env.example` and `.env.docker.example` as templates only.
+- The application supports two roles: `ADMIN` and `OFFICER`.

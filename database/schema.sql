@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS visits (
   time_in DATETIME NOT NULL,
   time_out DATETIME NULL,
   status ENUM('ACTIVE', 'COMPLETED') NOT NULL DEFAULT 'ACTIVE',
+  is_active TINYINT(1) AS (status = 'ACTIVE') STORED,
   deleted_at DATETIME NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -45,6 +46,7 @@ CREATE TABLE IF NOT EXISTS visits (
   INDEX idx_visits_status (status),
   INDEX idx_visits_time_in (time_in),
   INDEX idx_visits_visitor_status (visitor_id, status),
+  UNIQUE KEY ux_visits_active (visitor_id, is_active),
   INDEX idx_visits_officer (officer_id),
   INDEX idx_visits_deleted_at (deleted_at)
 );
@@ -56,4 +58,18 @@ CREATE TABLE IF NOT EXISTS token_blacklist (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_blacklist_token (token(191)),
   INDEX idx_blacklist_expires (expires_at)
+);
+
+CREATE TABLE IF NOT EXISTS audit_logs (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id INT NULL,
+  event_type VARCHAR(100) NOT NULL,
+  resource_type VARCHAR(100) NULL,
+  resource_id VARCHAR(100) NULL,
+  details JSON NULL,
+  ip_address VARCHAR(45) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_audit_user (user_id),
+  INDEX idx_audit_event (event_type),
+  INDEX idx_audit_created_at (created_at)
 );

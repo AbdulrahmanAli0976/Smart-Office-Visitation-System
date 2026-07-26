@@ -2,6 +2,7 @@
 import { requireAuth, requireActiveOfficer } from '../middleware/auth.js';
 import { createVisitor, searchVisitors, findDuplicates, findVisitorByPhone } from '../services/visitorService.js';
 import { bulkCheckIn, bulkCheckOut, createVisitAtomic, completeVisit, listActiveVisits, listVisitHistory, listVisitHistoryPaged } from '../services/visitService.js';
+import { recordAuditEvent } from '../services/auditService.js';
 import { normalizePhone } from '../utils/normalizePhone.js';
 import { isNonEmptyString, sanitizeText, isSafeString } from '../utils/validators.js';
 import { ok, fail } from '../utils/response.js';
@@ -9,7 +10,7 @@ import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
-// All visit routes require an active officer or admin
+// All visit routes require active attendance staff or admin roles
 router.use(requireAuth, requireActiveOfficer);
 
 const CODE_REQUIRED_TYPES = new Set(['BD', 'MS', 'AGG']);
@@ -115,7 +116,10 @@ router.post('/checkin', async (req, res, next) => {
 
     let duplicates = [];
     if (!selectedVisitor) {
-      // validateVisitorInput already called above if !selectedVisitor && visitor
+      if (!visitor) {
+        return fail(res, 'Search query or visitor details are required for check-in', 400);
+      }
+
       duplicates = await findDuplicates({
         fullName: visitor.full_name,
         phoneNumber: visitor.phone_number
@@ -158,10 +162,26 @@ router.post('/checkin', async (req, res, next) => {
 
     if (result.conflict) {
       logger.info('visits.checkin_conflict', { operation: 'CHECKIN', userId, visitorId, visitId: result.visitId });
+      await recordAuditEvent({
+        userId,
+        eventType: 'visit.checkin_conflict',
+        resourceType: 'visitor',
+        resourceId: visitorId,
+        details: { existingVisitId: result.visitId },
+        ipAddress: req.ip
+      });
       return fail(res, 'Visitor already checked in', 409);
     }
 
     logger.info('visits.checkin_success', { operation: 'CHECKIN', userId, visitId: result.visitId, visitorId });
+    await recordAuditEvent({
+      userId,
+      eventType: 'visit.checkin',
+      resourceType: 'visit',
+      resourceId: result.visitId,
+      details: { visitorId, duplicates },
+      ipAddress: req.ip
+    });
 
     return ok(res, {
       visit_id: result.visitId,
@@ -538,10 +558,25 @@ router.put('/:id/checkout', async (req, res, next) => {
     const updated = await completeVisit(visitId);
     if (!updated) {
       logger.warn('visits.checkout_not_found', { operation: 'CHECKOUT', userId, visitId });
+      await recordAuditEvent({
+        userId,
+        eventType: 'visit.checkout_failed',
+        resourceType: 'visit',
+        resourceId: visitId,
+        details: { reason: 'active_visit_not_found' },
+        ipAddress: req.ip
+      });
       return fail(res, 'Active visit not found', 404);
     }
 
     logger.info('visits.checkout_success', { operation: 'CHECKOUT', userId, visitId });
+    await recordAuditEvent({
+      userId,
+      eventType: 'visit.checkout',
+      resourceType: 'visit',
+      resourceId: visitId,
+      ipAddress: req.ip
+    });
     return ok(res, { status: 'COMPLETED' });
   } catch (err) {
     logger.error('visits.checkout_failed', { operation: 'CHECKOUT', userId, error: err.message, id: req.params?.id });

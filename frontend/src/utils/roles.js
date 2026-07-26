@@ -1,0 +1,9 @@
+export const USER_ROLES = {
+  ADMIN: 'ADMIN',
+  OFFICER: 'OFFICER'
+};
+
+export const MANAGE_VISITS_ROLES = new Set([
+  USER_ROLES.ADMIN,
+  USER_ROLES.OFFICER
+]);

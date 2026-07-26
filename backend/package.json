@@ -1,12 +1,13 @@
 {
     "name": "vms-backend",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "private": true,
     "type": "module",
     "scripts": {
         "dev": "node src/server.js",
         "start": "node src/server.js",
-        "dedupe-visitors": "node scripts/dedupe-visitors.js"
+        "dedupe-visitors": "node scripts/dedupe-visitors.js",
+        "auth-regression": "node scripts/authorization-regression.js"
     },
     "dependencies": {
         "@sentry/node": "^10.46.0",

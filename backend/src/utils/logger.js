@@ -68,7 +68,8 @@ function buildContext() {
   return {
     requestId: store?.requestId || null,
     route: store?.route || null,
-    userId: store?.userId || null
+    userId: store?.userId || null,
+    ip: store?.ip || null
   };
 }
 

@@ -9,6 +9,7 @@ import {
   findDuplicates
 } from '../services/visitorService.js';
 import { listVisitorHistory } from '../services/visitService.js';
+import { recordAuditEvent } from '../services/auditService.js';
 import { normalizePhone } from '../utils/normalizePhone.js';
 import { isNonEmptyString, sanitizeText, isSafeString } from '../utils/validators.js';
 import { ok, fail } from '../utils/response.js';
@@ -16,7 +17,7 @@ import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
-// All visitor data access requires an active officer or admin
+// All visitor data access requires active attendance staff or admin roles
 router.use(requireAuth, requireActiveOfficer);
 
 const CODE_REQUIRED_TYPES = new Set(['BD', 'MS', 'AGG']);
@@ -144,6 +145,19 @@ router.post('/', async (req, res, next) => {
     });
 
     logger.info('visitors.create_success', { operation: 'CREATE_VISITOR', userId, visitorId: id });
+    await recordAuditEvent({
+      userId,
+      eventType: 'visitor.create',
+      resourceType: 'visitor',
+      resourceId: id,
+      details: {
+        fullName: visitorData.full_name,
+        phoneNumber: visitorData.phone_number,
+        visitorType: visitorData.visitor_type,
+        code: visitorData.code
+      },
+      ipAddress: req.ip
+    });
     const visitor = await findVisitorById(id);
     return ok(res, visitor, 201);
   } catch (err) {
@@ -181,6 +195,19 @@ router.put('/:id', async (req, res, next) => {
     }
 
     logger.info('visitors.update_success', { operation: 'UPDATE_VISITOR', userId, visitorId: id });
+    await recordAuditEvent({
+      userId,
+      eventType: 'visitor.update',
+      resourceType: 'visitor',
+      resourceId: id,
+      details: {
+        fullName: visitorData.full_name,
+        phoneNumber: visitorData.phone_number,
+        visitorType: visitorData.visitor_type,
+        code: visitorData.code
+      },
+      ipAddress: req.ip
+    });
     const visitor = await findVisitorById(id);
     return ok(res, visitor);
   } catch (err) {

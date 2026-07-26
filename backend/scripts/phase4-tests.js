@@ -40,7 +40,8 @@ async function run() {
       const started = app.listen(0, () => resolve(started));
     });
     const { port } = server.address();
-    const baseUrl = `http://127.0.0.1:${port}/api`;
+    const apiHost = process.env.API_HOST || 'backend';
+    const baseUrl = `http://${apiHost}:${port}/api`;
 
     // Create admin user directly
     const adminEmail = `admin.test+${Date.now()}@example.com`;

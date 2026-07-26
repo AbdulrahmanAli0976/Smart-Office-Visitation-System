@@ -1,4 +1,5 @@
 import { db } from '../config/db.js';
+import { USER_ROLES } from '../config/roles.js';
 
 function buildRange({ from, to }, column = 'v.time_in') {
   const filters = [];
@@ -78,7 +79,8 @@ export async function getDashboardMetrics() {
   const pendingRows = await db.query(
     `SELECT COUNT(*) AS pending_officers
      FROM users
-     WHERE role = 'OFFICER' AND status = 'PENDING'`
+     WHERE role = ? AND status = 'PENDING'`,
+    [USER_ROLES.OFFICER]
   );
 
   const metrics = rows[0] || {};

@@ -27,7 +27,7 @@ export function createApp() {
     res.setHeader('X-Request-Id', req.requestId);
     const safeRoute = `${req.baseUrl}${req.path}`;
     req.safeRoute = safeRoute;
-    logStorage.run({ requestId: req.requestId, route: safeRoute }, next);
+    logStorage.run({ requestId: req.requestId, route: safeRoute, ip: req.ip }, next);
   });
 
   app.set('trust proxy', true);

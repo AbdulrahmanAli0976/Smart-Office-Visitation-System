@@ -11,10 +11,11 @@ import AdminPage from './pages/AdminPage.jsx';
 import { AuthContext } from './context/AuthContext.jsx';
 import { normalizeUser } from './utils/auth.js';
 import { api, setLoggingOut } from './api.js';
+import { USER_ROLES, MANAGE_VISITS_ROLES } from './utils/roles.js';
 
 function AppLayout({ user, isAdmin, onLogout }) {
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_#f7f4f0,_#e4d6c7_55%,_#d5c2ab)] flex">
+    <div className="h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_#f7f4f0,_#e4d6c7_55%,_#d5c2ab)] flex">
       <Sidebar user={user} isAdmin={isAdmin} onLogout={onLogout} />
       <main className="flex-1 overflow-y-auto px-6 py-8">
         <Outlet />
@@ -58,8 +59,8 @@ function AppRoutes() {
   const [systemError, setSystemError] = useState('');
   const [isOffline, setIsOffline] = useState(typeof navigator !== 'undefined' ? !navigator.onLine : false);
 
-  const isAdmin = user?.role === 'ADMIN';
-  const canManageVisits = user?.role === 'ADMIN' || user?.role === 'OFFICER';
+  const isAdmin = user?.role === USER_ROLES.ADMIN;
+  const canManageVisits = Boolean(user?.role && MANAGE_VISITS_ROLES.has(user.role));
 
   useEffect(() => {
     if (token) {
@@ -159,7 +160,7 @@ function AppRoutes() {
         setAuthError('Account role is missing. Contact admin.');
         return;
       }
-      if (normalized.role === 'OFFICER' && normalized.status !== 'ACTIVE') {
+      if (normalized.role === USER_ROLES.OFFICER && normalized.status !== 'ACTIVE') {
         setAuthError('Account not active. Await approval or contact admin.');
         return;
       }

@@ -10,7 +10,7 @@ const navItems = [
 
 export default function Sidebar({ user, isAdmin, onLogout }) {
   return (
-    <aside className="flex h-screen w-64 flex-col border-r border-clay-200 bg-white/80 px-5 py-6">
+    <aside className="sticky top-0 flex h-screen w-64 flex-col border-r border-clay-200 bg-white/80 px-5 py-6">
       <div className="mb-8">
         <p className="text-xs uppercase tracking-[0.4em] text-clay-600">VMS</p>
         <h1 className="text-xl font-semibold text-clay-900">Control Center</h1>

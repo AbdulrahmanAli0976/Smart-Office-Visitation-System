@@ -52,7 +52,8 @@ async function checkApi() {
   });
 
   const { port } = server.address();
-  const url = `http://127.0.0.1:${port}/api/health`;
+  const apiHost = process.env.API_HOST || 'backend';
+  const url = `http://${apiHost}:${port}/api/health`;
 
   try {
     const response = await httpGetJson(url);

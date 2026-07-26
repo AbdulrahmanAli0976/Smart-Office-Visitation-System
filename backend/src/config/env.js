@@ -19,12 +19,13 @@ const envFiles = [
 
 for (const envFile of envFiles) {
   if (fs.existsSync(envFile)) {
-    dotenv.config({ path: envFile, override: true });
+    dotenv.config({ path: envFile });
   }
 }
 
 const requireProduction = nodeEnv === 'production';
-const corsOriginRaw = process.env.CORS_ORIGIN ?? (requireProduction ? '' : 'http://localhost:5173');
+const defaultDevCors = 'http://localhost:5173,http://localhost:8080,http://host.docker.internal:8080';
+const corsOriginRaw = process.env.CORS_ORIGIN ?? (requireProduction ? '' : defaultDevCors);
 const corsOrigins = corsOriginRaw
   .split(',')
   .map((origin) => origin.trim())
@@ -61,7 +62,7 @@ const safeEnv = (name, fallback) => {
   return process.env[name] || fallback;
 };
 
-const dbHost = safeEnv('DB_HOST', 'localhost');
+const dbHost = safeEnv('DB_HOST', 'db');
 const dbUser = safeEnv('DB_USER', 'root');
 const dbName = safeEnv('DB_NAME', 'visitor_management');
 const rawDbPort = safeEnv('DB_PORT', '3306');
