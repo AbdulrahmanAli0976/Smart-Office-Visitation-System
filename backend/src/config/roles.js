@@ -16,5 +16,3 @@ export const ATTENDANCE_ROLES = new Set([
   USER_ROLES.ADMIN,
   USER_ROLES.OFFICER
 ]);
-
-export const OFFICER_ROLE_FILTER = `role = '${USER_ROLES.OFFICER}'`;
