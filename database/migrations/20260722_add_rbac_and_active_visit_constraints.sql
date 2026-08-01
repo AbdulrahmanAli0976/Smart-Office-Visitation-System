@@ -4,7 +4,7 @@ ALTER TABLE users
   MODIFY COLUMN role ENUM('ADMIN', 'OFFICER') NOT NULL;
 
 ALTER TABLE visits
-  ADD COLUMN is_active TINYINT(1) AS (status = 'ACTIVE') STORED AFTER status,
+  ADD COLUMN is_active TINYINT(1) AS (IF(status = 'ACTIVE', 1, NULL)) STORED AFTER status,
   ADD UNIQUE KEY ux_visits_active (visitor_id, is_active);
 
 CREATE TABLE IF NOT EXISTS audit_logs (

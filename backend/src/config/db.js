@@ -63,7 +63,7 @@ export async function ensureCoreTables() {
       time_in DATETIME NOT NULL,
       time_out DATETIME NULL,
       status ENUM('ACTIVE', 'COMPLETED') NOT NULL DEFAULT 'ACTIVE',
-      is_active TINYINT(1) AS (status = 'ACTIVE') STORED,
+      is_active TINYINT(1) AS (IF(status = 'ACTIVE', 1, NULL)) STORED,
       deleted_at DATETIME NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -79,10 +79,10 @@ export async function ensureCoreTables() {
   );
   try {
     await pool.execute(
-      `ALTER TABLE visits ADD COLUMN is_active TINYINT(1) AS (status = 'ACTIVE') STORED`
+      `ALTER TABLE visits MODIFY COLUMN is_active TINYINT(1) AS (IF(status = 'ACTIVE', 1, NULL)) STORED`
     );
   } catch (err) {
-    if (!/Duplicate column|duplicate column|Duplicate.*field|already exists/i.test(err.message)) {
+    if (!/Duplicate column|duplicate column|Duplicate.*field|already exists|Unknown column/i.test(err.message)) {
       throw err;
     }
   }
@@ -91,7 +91,7 @@ export async function ensureCoreTables() {
       `ALTER TABLE visits ADD UNIQUE KEY ux_visits_active (visitor_id, is_active)`
     );
   } catch (err) {
-    if (!/Duplicate key|duplicate key|already exists/i.test(err.message)) {
+    if (!/Duplicate key|duplicate key|already exists|Duplicate entry/i.test(err.message)) {
       throw err;
     }
   }
