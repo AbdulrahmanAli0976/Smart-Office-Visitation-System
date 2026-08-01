@@ -1,4 +1,4 @@
-﻿import { db } from '../config/db.js';
+import { db } from '../config/db.js';
 import { normalizePhone } from '../utils/normalizePhone.js';
 import { sanitizeLike } from '../utils/validators.js';
 
@@ -118,15 +118,17 @@ export async function listVisitorsPaged({ search = '', status = 'ACTIVE', visito
     }
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
-    const sql = `SELECT SQL_CALC_FOUND_ROWS id, full_name, phone_number, visitor_type, code, deleted_at, created_at, updated_at
+    const sql = `SELECT id, full_name, phone_number, visitor_type, code, deleted_at, created_at, updated_at
      FROM visitors
      ${where}
      ORDER BY created_at DESC
-     LIMIT ${limit} OFFSET ${offset}`;
+     LIMIT ? OFFSET ?`;
 
-    const [rows] = await conn.execute(sql, params);
-    const [totals] = await conn.execute('SELECT FOUND_ROWS() as total');
-    const total = totals[0]?.total ?? 0;
+    const countSql = `SELECT COUNT(*) as total FROM visitors ${where}`;
+
+    const [rows] = await conn.execute(sql, [...params, Number(limit), Number(offset)]);
+    const [countRows] = await conn.execute(countSql, params);
+    const total = countRows[0]?.total ?? 0;
     return { rows, total };
   } finally {
     conn.release();

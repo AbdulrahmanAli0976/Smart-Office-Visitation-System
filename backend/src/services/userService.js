@@ -62,15 +62,17 @@ export async function listOfficersPaged({ search = '', status = '', limit = 10, 
     }
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
-    const sql = `SELECT SQL_CALC_FOUND_ROWS id, full_name, email, role, status, created_at, updated_at
+    const sql = `SELECT id, full_name, email, role, status, created_at, updated_at
      FROM users
      ${where}
      ORDER BY created_at DESC
-     LIMIT ${limit} OFFSET ${offset}`;
+     LIMIT ? OFFSET ?`;
 
-    const [rows] = await conn.execute(sql, params);
-    const [totals] = await conn.execute('SELECT FOUND_ROWS() as total');
-    const total = totals[0]?.total ?? 0;
+    const countSql = `SELECT COUNT(*) as total FROM users ${where}`;
+
+    const [rows] = await conn.execute(sql, [...params, Number(limit), Number(offset)]);
+    const [countRows] = await conn.execute(countSql, params);
+    const total = countRows[0]?.total ?? 0;
     return { rows, total };
   } finally {
     conn.release();

@@ -1,4 +1,4 @@
-﻿import { db } from '../config/db.js';
+import { db } from '../config/db.js';
 import { normalizePhone } from '../utils/normalizePhone.js';
 import { sanitizeLike } from '../utils/validators.js';
 import { logger } from '../utils/logger.js';
@@ -215,7 +215,7 @@ export async function listVisitHistoryPaged({ from, to, visitorType, officerId, 
 
     const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
 
-    const sql = `SELECT SQL_CALC_FOUND_ROWS v.id AS visit_id, v.status, v.time_in, v.time_out,
+    const sql = `SELECT v.id AS visit_id, v.status, v.time_in, v.time_out,
             v.purpose, v.person_to_see,
             vis.id AS visitor_id, vis.full_name, vis.phone_number, vis.visitor_type, vis.code,
             u.id AS officer_id, u.full_name AS officer_name
@@ -224,11 +224,17 @@ export async function listVisitHistoryPaged({ from, to, visitorType, officerId, 
      JOIN users u ON u.id = v.officer_id
      ${where}
      ORDER BY v.time_in DESC
-     LIMIT ${limit} OFFSET ${offset}`;
+     LIMIT ? OFFSET ?`;
 
-    const [rows] = await conn.execute(sql, params);
-    const [totals] = await conn.execute('SELECT FOUND_ROWS() as total');
-    const total = totals[0]?.total ?? 0;
+    const countSql = `SELECT COUNT(*) as total
+     FROM visits v
+     JOIN visitors vis ON vis.id = v.visitor_id
+     JOIN users u ON u.id = v.officer_id
+     ${where}`;
+
+    const [rows] = await conn.execute(sql, [...params, Number(limit), Number(offset)]);
+    const [countRows] = await conn.execute(countSql, params);
+    const total = countRows[0]?.total ?? 0;
     return { rows, total };
   } finally {
     conn.release();
