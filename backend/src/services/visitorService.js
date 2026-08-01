@@ -126,7 +126,7 @@ export async function listVisitorsPaged({ search = '', status = 'ACTIVE', visito
 
     const countSql = `SELECT COUNT(*) as total FROM visitors ${where}`;
 
-    const [rows] = await conn.execute(sql, [...params, Number(limit), Number(offset)]);
+    const [rows] = await conn.query(sql, [...params, parseInt(limit, 10), parseInt(offset, 10)]);
     const [countRows] = await conn.execute(countSql, params);
     const total = countRows[0]?.total ?? 0;
     return { rows, total };
