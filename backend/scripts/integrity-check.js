@@ -52,7 +52,7 @@ async function checkApi() {
   });
 
   const { port } = server.address();
-  const apiHost = process.env.API_HOST || 'backend';
+  const apiHost = process.env.API_HOST || '127.0.0.1';
   const url = `http://${apiHost}:${port}/api/health`;
 
   try {
