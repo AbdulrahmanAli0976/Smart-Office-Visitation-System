@@ -61,9 +61,9 @@ async function runIssue3RegressionTest() {
     }
 
     // 5. Test deleteOfficer
-    const deleteCount = await deleteOfficer(officerId);
-    if (deleteCount !== 1) {
-      throw new Error(`deleteOfficer failed to delete officer ${officerId}`);
+    const deleteResult = await deleteOfficer(officerId);
+    if (deleteResult.affectedRows !== 1 || deleteResult.action !== 'deleted') {
+      throw new Error(`deleteOfficer failed to delete officer ${officerId}: ${JSON.stringify(deleteResult)}`);
     }
     console.log(`deleteOfficer successfully deleted test officer ${officerId}`);
 

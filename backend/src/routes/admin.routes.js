@@ -1,4 +1,4 @@
-﻿import express from 'express';
+import express from 'express';
 import { listOfficers, listOfficersPaged, updateOfficerStatus, deleteOfficer } from '../services/userService.js';
 import { requireAuth, requireRole, requireActiveOfficer } from '../middleware/auth.js';
 import { recordAuditEvent } from '../services/auditService.js';
@@ -105,21 +105,29 @@ router.delete('/officers/:id', async (req, res, next) => {
   const adminId = req.user?.id;
   try {
     const { id } = req.params;
-    const deleted = await deleteOfficer(id);
-    if (!deleted) {
+    const result = await deleteOfficer(id);
+    if (!result.affectedRows) {
       logger.warn('admin.delete_officer_not_found', { operation: 'DELETE_OFFICER', adminId, targetUserId: id });
       return fail(res, 'Officer not found', 404);
     }
-    logger.info('admin.delete_officer_success', { operation: 'DELETE_OFFICER', adminId, targetUserId: id });
+    const isDeleted = result.action === 'deleted';
+    logger.info('admin.delete_officer_success', { operation: 'DELETE_OFFICER', adminId, targetUserId: id, action: result.action });
     await recordAuditEvent({
       userId: adminId,
-      eventType: 'admin.delete_officer',
+      eventType: isDeleted ? 'admin.delete_officer' : 'admin.deactivate_officer',
       resourceType: 'user',
       resourceId: id,
-      details: { deleted: true },
+      details: { action: result.action, visitCount: result.visitCount },
       ipAddress: req.ip
     });
-    return ok(res, { deleted: true });
+    return ok(res, {
+      deleted: isDeleted,
+      deactivated: !isDeleted,
+      action: result.action,
+      message: !isDeleted
+        ? 'Officer has historical visit records and was deactivated to preserve audit history.'
+        : 'Officer deleted successfully'
+    });
   } catch (err) {
     logger.error('admin.delete_officer_failed', { operation: 'DELETE_OFFICER', adminId, error: err.message });
     return next(err);

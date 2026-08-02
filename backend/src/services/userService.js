@@ -98,9 +98,31 @@ export async function updateOfficerStatus(id, status) {
 }
 
 export async function deleteOfficer(id) {
+  const userRows = await db.query(
+    'SELECT id, role, status FROM users WHERE id = ? AND role = ?',
+    [id, USER_ROLES.OFFICER]
+  );
+  if (!userRows.length) {
+    return { action: 'not_found', affectedRows: 0, visitCount: 0 };
+  }
+
+  const visitRows = await db.query(
+    'SELECT COUNT(*) as count FROM visits WHERE officer_id = ?',
+    [id]
+  );
+  const visitCount = visitRows[0]?.count ?? 0;
+
+  if (visitCount > 0) {
+    const result = await db.query(
+      `UPDATE users SET status = 'INACTIVE', updated_at = NOW() WHERE id = ? AND role = ?`,
+      [id, USER_ROLES.OFFICER]
+    );
+    return { action: 'deactivated', affectedRows: result.affectedRows, visitCount };
+  }
+
   const result = await db.query(
     `DELETE FROM users WHERE id = ? AND role = ?`,
     [id, USER_ROLES.OFFICER]
   );
-  return result.affectedRows;
+  return { action: 'deleted', affectedRows: result.affectedRows, visitCount: 0 };
 }
