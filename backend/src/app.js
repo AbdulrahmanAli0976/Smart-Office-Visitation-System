@@ -1,4 +1,4 @@
-﻿import express from 'express';
+import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -142,8 +142,6 @@ export function createApp() {
     return fail(res, 'Route not found', 404);
   });
 
-  app.use(errorHandler);
-
   if (sentryEnabled) {
     if (typeof Sentry.setupExpressErrorHandler === 'function') {
       Sentry.setupExpressErrorHandler(app);
@@ -151,6 +149,8 @@ export function createApp() {
       app.use(Sentry.Handlers.errorHandler());
     }
   }
+
+  app.use(errorHandler);
 
   return app;
 }

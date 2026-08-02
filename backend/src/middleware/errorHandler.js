@@ -1,4 +1,4 @@
-﻿import { fail } from '../utils/response.js';
+import { fail } from '../utils/response.js';
 import { logger } from '../utils/logger.js';
 
 export function errorHandler(err, req, res, next) {
@@ -16,9 +16,5 @@ export function errorHandler(err, req, res, next) {
     stack: !isProduction ? err.stack : undefined
   });
 
-  fail(res, message, status);
-
-  if (req.app?.get('sentryEnabled')) {
-    return next(err);
-  }
+  return fail(res, message, status);
 }
