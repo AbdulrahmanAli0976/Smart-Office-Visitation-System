@@ -186,6 +186,9 @@ export const api = {
   login(payload) {
     return request('/auth/login', { method: 'POST', body: payload });
   },
+  logout(token) {
+    return request('/auth/logout', { method: 'POST', token });
+  },
   register(payload) {
     return request('/auth/register', { method: 'POST', body: payload });
   },

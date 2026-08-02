@@ -105,11 +105,21 @@ function AppRoutes() {
     };
   }, []);
 
-  const logout = useCallback((note) => {
+  const logout = useCallback(async (note) => {
     const safeNote = (note && typeof note === 'object')
       ? (console.warn('OBJECT DETECTED IN RENDER', note), '')
       : note;
     setLoggingOut(true);
+
+    const currentToken = token || localStorage.getItem('vms_token');
+    if (currentToken) {
+      try {
+        await api.logout(currentToken);
+      } catch (err) {
+        console.warn('Server logout failed or token already revoked:', err?.message);
+      }
+    }
+
     setToken('');
     setUser(null);
     localStorage.removeItem('vms_token');
@@ -120,7 +130,7 @@ function AppRoutes() {
     setAuthError('');
     navigate('/login', { replace: true });
     setTimeout(() => setLoggingOut(false), 1000);
-  }, [navigate]);
+  }, [token, navigate]);
 
   const handleAuthFailure = (err) => {
     if (err?.message === 'Request blocked during logout' || err?.isAuthError) {
