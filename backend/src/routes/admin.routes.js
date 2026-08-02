@@ -6,16 +6,11 @@ import { ADMIN_ROLES } from '../config/roles.js';
 import { ok, fail } from '../utils/response.js';
 import { logger } from '../utils/logger.js';
 
+import { parsePagination } from '../utils/validators.js';
+
 const router = express.Router();
 
 const OFFICER_STATUS = new Set(['PENDING', 'ACTIVE', 'INACTIVE']);
-
-function parsePagination(query) {
-  const page = Math.max(parseInt(query.page, 10) || 1, 1);
-  const limit = Math.min(parseInt(query.limit, 10) || 10, 50);
-  const offset = (page - 1) * limit;
-  return { page, limit, offset };
-}
 
 router.use(requireAuth, requireActiveOfficer, requireRole(...Array.from(ADMIN_ROLES)));
 

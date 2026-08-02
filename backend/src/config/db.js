@@ -42,16 +42,55 @@ export async function ensureCoreTables() {
       full_name VARCHAR(120) NOT NULL,
       phone_number VARCHAR(30) NOT NULL,
       visitor_type ENUM('BD', 'MS', 'AGG', 'AGENT_MERCHANT') NOT NULL,
-      code VARCHAR(50) UNIQUE NULL,
+      code VARCHAR(50) NULL,
       deleted_at DATETIME NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      UNIQUE KEY ux_visitors_phone (phone_number),
+      active_phone VARCHAR(30) AS (IF(deleted_at IS NULL, phone_number, NULL)) STORED,
+      active_code VARCHAR(50) AS (IF(deleted_at IS NULL, code, NULL)) STORED,
+      UNIQUE KEY ux_visitors_active_phone (active_phone),
+      UNIQUE KEY ux_visitors_active_code (active_code),
       INDEX idx_visitors_name (full_name),
       INDEX idx_visitors_type (visitor_type),
       INDEX idx_visitors_deleted_at (deleted_at)
     )`
   );
+  try {
+    await pool.execute(
+      `ALTER TABLE visitors ADD COLUMN active_phone VARCHAR(30) AS (IF(deleted_at IS NULL, phone_number, NULL)) STORED`
+    );
+  } catch (err) {
+    if (!/Duplicate column|duplicate column|Duplicate.*field|already exists/i.test(err.message)) {
+      throw err;
+    }
+  }
+  try {
+    await pool.execute(
+      `ALTER TABLE visitors ADD COLUMN active_code VARCHAR(50) AS (IF(deleted_at IS NULL, code, NULL)) STORED`
+    );
+  } catch (err) {
+    if (!/Duplicate column|duplicate column|Duplicate.*field|already exists/i.test(err.message)) {
+      throw err;
+    }
+  }
+  try {
+    await pool.execute(
+      `ALTER TABLE visitors ADD UNIQUE KEY ux_visitors_active_phone (active_phone)`
+    );
+  } catch (err) {
+    if (!/Duplicate key|duplicate key|already exists|Duplicate entry/i.test(err.message)) {
+      throw err;
+    }
+  }
+  try {
+    await pool.execute(
+      `ALTER TABLE visitors ADD UNIQUE KEY ux_visitors_active_code (active_code)`
+    );
+  } catch (err) {
+    if (!/Duplicate key|duplicate key|already exists|Duplicate entry/i.test(err.message)) {
+      throw err;
+    }
+  }
 
   await pool.execute(
     `CREATE TABLE IF NOT EXISTS visits (
@@ -132,10 +171,18 @@ export const db = {
   },
   async queryWithTimeout(sql, params = [], timeoutMs = 5000) {
     const conn = await pool.getConnection();
+    let timer;
     try {
-      const [rows] = await conn.execute(sql, params, { timeout: timeoutMs });
+      const queryPromise = conn.execute(sql, params);
+      const timeoutPromise = new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          reject(new Error(`Query execution timed out after ${timeoutMs}ms`));
+        }, timeoutMs);
+      });
+      const [rows] = await Promise.race([queryPromise, timeoutPromise]);
       return rows;
     } finally {
+      clearTimeout(timer);
       conn.release();
     }
   }

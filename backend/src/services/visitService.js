@@ -113,8 +113,8 @@ export async function bulkCheckIn({ officerId, visitors, purpose, personToSee })
         );
 
         if (active.length > 0) {
-          await conn.rollback();
-          return { conflict: true };
+          summary.failed += 1;
+          continue;
         }
 
         // 3. Create Visit

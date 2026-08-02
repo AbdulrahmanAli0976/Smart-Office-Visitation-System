@@ -1,4 +1,4 @@
-﻿export function isEmail(value) {
+export function isEmail(value) {
   return typeof value === 'string' && value.length < 255 && /.+@.+\..+/.test(value);
 }
 
@@ -43,4 +43,16 @@ export function sanitizeText(value) {
     .trim()
     .replace(/<[^>]*>?/gm, '') // Remove HTML tags
     .slice(0, 500); // Hard limit for any single text field
+}
+
+export function parsePagination(query = {}) {
+  const page = Math.max(parseInt(query.page, 10) || 1, 1);
+  const limit = Math.min(parseInt(query.limit, 10) || 10, 50);
+  const offset = (page - 1) * limit;
+  return { page, limit, offset };
+}
+
+export function normalizeVisitorType(type) {
+  if (typeof type !== 'string') return '';
+  return type.trim().toUpperCase();
 }

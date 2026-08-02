@@ -1,4 +1,4 @@
-﻿import express from 'express';
+import express from 'express';
 import { requireAuth, requireActiveOfficer } from '../middleware/auth.js';
 import {
   createVisitor,
@@ -11,7 +11,7 @@ import {
 import { listVisitorHistory } from '../services/visitService.js';
 import { recordAuditEvent } from '../services/auditService.js';
 import { normalizePhone } from '../utils/normalizePhone.js';
-import { isNonEmptyString, sanitizeText, isSafeString } from '../utils/validators.js';
+import { isNonEmptyString, sanitizeText, isSafeString, parsePagination } from '../utils/validators.js';
 import { ok, fail } from '../utils/response.js';
 import { logger } from '../utils/logger.js';
 
@@ -34,13 +34,6 @@ const VISITOR_TYPE_ALIASES = {
 };
 const VISITOR_TYPES = new Set(Object.values(VISITOR_TYPE_ALIASES));
 const VISITOR_STATUS = new Set(['ACTIVE', 'DELETED', 'ALL']);
-
-function parsePagination(query) {
-  const page = Math.max(parseInt(query.page, 10) || 1, 1);
-  const limit = Math.min(parseInt(query.limit, 10) || 10, 50);
-  const offset = (page - 1) * limit;
-  return { page, limit, offset };
-}
 
 function normalizeVisitorType(value) {
   if (value === null || value === undefined) return '';

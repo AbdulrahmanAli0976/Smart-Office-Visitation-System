@@ -1,10 +1,10 @@
-﻿import express from 'express';
+import express from 'express';
 import { requireAuth, requireActiveOfficer } from '../middleware/auth.js';
 import { createVisitor, searchVisitors, findDuplicates, findVisitorByPhone } from '../services/visitorService.js';
 import { bulkCheckIn, bulkCheckOut, createVisitAtomic, completeVisit, listActiveVisits, listVisitHistory, listVisitHistoryPaged } from '../services/visitService.js';
 import { recordAuditEvent } from '../services/auditService.js';
 import { normalizePhone } from '../utils/normalizePhone.js';
-import { isNonEmptyString, sanitizeText, isSafeString } from '../utils/validators.js';
+import { isNonEmptyString, sanitizeText, isSafeString, parsePagination } from '../utils/validators.js';
 import { ok, fail } from '../utils/response.js';
 import { logger } from '../utils/logger.js';
 
@@ -28,13 +28,6 @@ const VISITOR_TYPE_ALIASES = {
 const VISITOR_TYPES = new Set(Object.values(VISITOR_TYPE_ALIASES));
 
 const VISIT_STATUS = new Set(['ACTIVE', 'COMPLETED']);
-
-function parsePagination(query) {
-  const page = Math.max(parseInt(query.page, 10) || 1, 1);
-  const limit = Math.min(parseInt(query.limit, 10) || 10, 50);
-  const offset = (page - 1) * limit;
-  return { page, limit, offset };
-}
 
 function isValidDate(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
@@ -256,10 +249,6 @@ router.post('/bulk-checkin', async (req, res, next) => {
       purpose,
       personToSee
     });
-
-    if (summary.conflict) {
-      return fail(res, 'Visitor already checked in', 409);
-    }
 
     const failed = summary.failed + invalidCount;
 
