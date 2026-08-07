@@ -61,11 +61,10 @@ async function checkApi() {
     results.api.ok =
       response.status === 200 &&
       response.body &&
-      response.body.success === true &&
-      response.body.data &&
-      response.body.data.status === 'ok';
+      response.body.status === 'OK' &&
+      response.body.database === 'UP';
     if (!results.api.ok) {
-      results.api.error = `Unexpected response status ${response.status}`;
+      results.api.error = `Unexpected health response body: ${response.raw}`;
     }
   } catch (err) {
     results.api.error = err?.message || String(err);
