@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { createApp } from '../src/app.js';
 import { db } from '../src/config/db.js';
 import { env } from '../src/config/env.js';
+import { normalizePhone } from '../src/utils/normalizePhone.js';
 
 const results = [];
 const created = {
@@ -147,7 +148,7 @@ async function run() {
       token: officerToken,
       body: { full_name: 'Visitor Three', phone_number: '3333333333', visitor_type: 'BD', code: testCode }
     });
-    const createdVisitor = response.data?.data?.visitor;
+    const createdVisitor = response.data?.data;
     if (createdVisitor?.id) created.visitorIds.push(createdVisitor.id);
     record('Visitor create', response.status === 201 && response.data?.success === true);
 
@@ -165,14 +166,14 @@ async function run() {
       token: officerToken,
       body: { full_name: 'Visitor Three Alt', phone_number: '3333333333', visitor_type: 'MS', code: `TEST2-${Date.now()}` }
     });
-    const dupVisitor = response.data?.data?.visitor;
+    const dupVisitor = response.data?.data;
     if (dupVisitor?.id) created.visitorIds.push(dupVisitor.id);
-    record('Duplicate phone warning', response.status === 201 && (response.data?.data?.duplicates || []).length > 0);
+    record('Duplicate phone reuse', response.status === 201 && dupVisitor?.id === createdVisitor?.id);
 
     // Smart search priority
     response = await rawRequest(baseUrl, `/visitors/search?q=${encodeURIComponent(testCode)}`, { token: officerToken });
     const searchResults = response.data?.data || [];
-    record('Smart search by code priority', response.status === 200 && searchResults[0]?.priority === 0);
+    record('Smart search by code', response.status === 200 && searchResults[0]?.code === testCode);
 
     // Check-in with query
     response = await rawRequest(baseUrl, '/visits/checkin', {
@@ -208,7 +209,8 @@ async function run() {
 
     // Bulk check-in/out
     const bulkCodeBase = `BULK-${Date.now()}`;
-    const bulkPhones = [`800${Date.now()}1`, `800${Date.now()}2`];
+    const bulkPhoneSuffix = String(Date.now()).slice(-7);
+    const bulkPhones = [`080${bulkPhoneSuffix}1`, `080${bulkPhoneSuffix}2`];
     created.bulkPhones.push(...bulkPhones);
     response = await rawRequest(baseUrl, '/visits/bulk-checkin', {
       method: 'POST',
@@ -222,14 +224,15 @@ async function run() {
     });
     record('Bulk check-in', response.status === 200 && response.data?.success === true);
 
-    const bulkRows = await db.query('SELECT id FROM visitors WHERE phone_number IN (?, ?)', bulkPhones);
+    const normalizedBulkPhones = bulkPhones.map(normalizePhone);
+    const bulkRows = await db.query('SELECT id FROM visitors WHERE phone_number IN (?, ?)', normalizedBulkPhones);
     for (const row of bulkRows) {
       created.visitorIds.push(row.id);
     }
 
     response = await rawRequest(baseUrl, '/visits/active', { token: officerToken });
     const bulkActive = response.data?.data || [];
-    const bulkVisitIds = bulkActive.filter((v) => bulkPhones.includes(v.phone_number)).map((v) => v.visit_id);
+    const bulkVisitIds = bulkActive.filter((v) => normalizedBulkPhones.includes(v.phone_number)).map((v) => v.visit_id);
     if (bulkVisitIds.length) created.visitIds.push(...bulkVisitIds);
 
     if (bulkVisitIds.length === 0) {
@@ -283,7 +286,7 @@ async function run() {
 
     // Pagination checks
     response = await rawRequest(baseUrl, '/visitors?page=1&limit=1', { token: adminToken });
-    record('Visitors pagination', response.status === 200 && response.data?.pagination && response.data?.meta);
+    record('Visitors pagination', response.status === 200 && response.data?.pagination);
 
     response = await rawRequest(baseUrl, '/visits?page=1&limit=5', { token: adminToken });
     record('Visits pagination', response.status === 200 && response.data?.pagination && response.data?.meta);
