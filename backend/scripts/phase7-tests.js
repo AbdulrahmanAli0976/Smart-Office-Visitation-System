@@ -91,13 +91,13 @@ async function run() {
       token: officerToken,
       body: { full_name: 'Phase7 Visitor', phone_number: '1234567890', visitor_type: 'BD', code: `P7-${Date.now()}` }
     });
-    created.visitorId = response.data?.data?.visitor?.id || null;
+    created.visitorId = response.data?.data?.id || null;
     record('Visitor create', response.status === 201);
 
     response = await jsonRequest(baseUrl, '/visits/checkin', {
       method: 'POST',
       token: officerToken,
-      body: { query: response.data?.data?.visitor?.code || '', purpose: 'Phase7', person_to_see: 'Manager' }
+      body: { query: response.data?.data?.code || '', purpose: 'Phase7', person_to_see: 'Manager' }
     });
     created.visitId = response.data?.data?.visit_id || null;
     record('Check-in', response.status === 201);
