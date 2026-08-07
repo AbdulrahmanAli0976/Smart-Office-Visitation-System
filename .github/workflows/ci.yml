@@ -51,6 +51,7 @@ jobs:
         working-directory: backend
         env:
           DB_HOST: 127.0.0.1
+          API_HOST: 127.0.0.1
           DB_PORT: 3306
           DB_USER: vms_user
           DB_PASSWORD: vms_pass
