@@ -67,9 +67,9 @@ async function run() {
     response = await rawRequest(baseUrl, '/visitors', {
       method: 'POST',
       token: adminToken,
-      body: { full_name: 'Admin Visitor', phone_number: `700${Date.now()}`, visitor_type: 'BD', code: adminVisitorCode }
+      body: { full_name: 'Admin Visitor', phone_number: `080${String(Date.now()).slice(-8)}`, visitor_type: 'BD', code: adminVisitorCode }
     });
-    const adminVisitor = response.data?.data?.visitor;
+    const adminVisitor = response.data?.data;
     if (adminVisitor?.id) created.visitorIds.push(adminVisitor.id);
     record('Admin create visitor', response.status === 201 && response.data?.success === true);
 
