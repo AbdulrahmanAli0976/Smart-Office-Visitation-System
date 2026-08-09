@@ -123,11 +123,11 @@ export default function AdminPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col gap-2">
-        <p className="text-xs uppercase tracking-[0.4em] text-clay-600">Admin</p>
-        <h2 className="text-2xl font-semibold text-clay-900">Officer Management</h2>
-        <p className="text-sm text-clay-600">Approve, deactivate, or remove officer accounts.</p>
+    <div className="space-y-8">
+      <header className="flex flex-col gap-3">
+        <p className="eyebrow">Administration</p>
+        <h2 className="page-title">Officer management</h2>
+        <p className="page-subtitle">Review access requests and manage the active staff directory.</p>
       </header>
 
       {error && (

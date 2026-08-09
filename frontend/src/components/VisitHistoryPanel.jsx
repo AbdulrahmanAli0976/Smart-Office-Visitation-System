@@ -30,22 +30,22 @@ export default function VisitHistoryPanel({
   onNext
 }) {
   return (
-    <section className="clay-card p-5 space-y-4">
+    <section className="clay-card space-y-5 p-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-clay-600">History</p>
-          <h3 className="text-lg font-semibold text-clay-900">Visit History</h3>
+          <p className="eyebrow">Audit trail</p>
+          <h3 className="section-title">Visit history</h3>
         </div>
         <div className="flex items-center gap-2">
           <button
-            className="rounded-lg border border-clay-300 px-3 py-1 text-sm text-clay-700 hover:bg-clay-200 disabled:opacity-60"
+            className="button-secondary"
             onClick={onApply}
             disabled={loading}
           >
             {loading ? 'Loading...' : 'Refresh'}
           </button>
           <button
-            className="rounded-lg bg-clay-800 px-3 py-1 text-sm text-white shadow-clay disabled:opacity-60"
+            className="button-primary"
             onClick={onExport}
             disabled={loading}
           >
@@ -57,25 +57,25 @@ export default function VisitHistoryPanel({
       <div className="grid gap-3 md:grid-cols-6">
         <input
           type="text"
-          className="rounded-xl border border-white/70 bg-white/70 px-3 py-2 text-sm shadow-inner"
+          className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm shadow-inner"
           placeholder="Search visitor/officer"
           value={filters.search}
           onChange={(event) => onChange({ ...filters, search: event.target.value })}
         />
         <input
           type="date"
-          className="rounded-xl border border-white/70 bg-white/70 px-3 py-2 text-sm shadow-inner"
+          className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm shadow-inner"
           value={filters.from}
           onChange={(event) => onChange({ ...filters, from: event.target.value })}
         />
         <input
           type="date"
-          className="rounded-xl border border-white/70 bg-white/70 px-3 py-2 text-sm shadow-inner"
+          className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm shadow-inner"
           value={filters.to}
           onChange={(event) => onChange({ ...filters, to: event.target.value })}
         />
         <select
-          className="rounded-xl border border-white/70 bg-white/70 px-3 py-2 text-sm shadow-inner"
+          className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm shadow-inner"
           value={filters.visitor_type}
           onChange={(event) => onChange({ ...filters, visitor_type: event.target.value })}
         >
@@ -84,7 +84,7 @@ export default function VisitHistoryPanel({
           ))}
         </select>
         <select
-          className="rounded-xl border border-white/70 bg-white/70 px-3 py-2 text-sm shadow-inner"
+          className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm shadow-inner"
           value={filters.status}
           onChange={(event) => onChange({ ...filters, status: event.target.value })}
         >
@@ -94,7 +94,7 @@ export default function VisitHistoryPanel({
         </select>
         {isAdmin ? (
           <select
-            className="rounded-xl border border-white/70 bg-white/70 px-3 py-2 text-sm shadow-inner"
+            className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm shadow-inner"
             value={filters.officer_id}
             onChange={(event) => onChange({ ...filters, officer_id: event.target.value })}
           >
@@ -107,21 +107,21 @@ export default function VisitHistoryPanel({
           <input
             type="text"
             readOnly
-            className="rounded-xl border border-white/70 bg-white/70 px-3 py-2 text-sm shadow-inner text-clay-600"
+            className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500 shadow-inner"
             value="My visits"
           />
         )}
       </div>
 
       {visits.length === 0 && !loading && (
-        <p className="text-sm text-clay-600">No visits found for this range.</p>
+        <p className="rounded-xl bg-slate-50 px-4 py-5 text-sm text-slate-500">No visits found for this range.</p>
       )}
 
       {visits.length > 0 && (
         <div className="overflow-auto">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[720px] text-sm">
             <thead>
-              <tr className="text-left text-clay-600">
+              <tr className="text-left text-slate-500">
                 <th className="pb-2">Visitor</th>
                 <th className="pb-2">Type</th>
                 <th className="pb-2">Check-in</th>
@@ -130,19 +130,19 @@ export default function VisitHistoryPanel({
                 <th className="pb-2">Status</th>
               </tr>
             </thead>
-            <tbody className="text-clay-800">
+            <tbody className="text-slate-700">
               {visits.map((visit) => (
-                <tr key={visit.visit_id} className="border-t border-white/70">
+                <tr key={visit.visit_id} className="border-t border-slate-100">
                   <td className="py-2">
-                    <div className="font-medium text-clay-900">{visit.full_name}</div>
-                    <div className="text-xs text-clay-600">{visit.phone_number}</div>
+                    <div className="font-medium text-slate-900">{visit.full_name}</div>
+                    <div className="text-xs text-slate-500">{visit.phone_number}</div>
                   </td>
                   <td className="py-2 text-xs uppercase tracking-[0.1em]">{visit.visitor_type?.replace('_', ' ')}</td>
                   <td className="py-2">{new Date(visit.time_in).toLocaleString()}</td>
-                  <td className="py-2">{visit.time_out ? new Date(visit.time_out).toLocaleString() : '?'}</td>
+                  <td className="py-2">{visit.time_out ? new Date(visit.time_out).toLocaleString() : '—'}</td>
                   <td className="py-2">{visit.officer_name}</td>
                   <td className="py-2">
-                    <span className={`rounded-full px-2 py-1 text-xs ${visit.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-clay-200 text-clay-700'}`}>
+                    <span className={`rounded-full px-2 py-1 text-xs ${visit.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-700'}`}>
                       {visit.status}
                     </span>
                   </td>
@@ -153,18 +153,18 @@ export default function VisitHistoryPanel({
         </div>
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-clay-600">
-        <span>Page {page} of {totalPages} ? Showing {visits.length} of {total}</span>
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
+        <span>Page {page} of {totalPages} · Showing {visits.length} of {total}</span>
         <div className="flex items-center gap-2">
           <button
-            className="rounded-lg border border-clay-300 px-3 py-1 text-xs text-clay-700 disabled:opacity-60"
+            className="rounded-lg border border-slate-200 px-3 py-1 text-xs text-slate-700 disabled:opacity-60"
             onClick={onPrev}
             disabled={page <= 1}
           >
             Previous
           </button>
           <button
-            className="rounded-lg border border-clay-300 px-3 py-1 text-xs text-clay-700 disabled:opacity-60"
+            className="rounded-lg border border-slate-200 px-3 py-1 text-xs text-slate-700 disabled:opacity-60"
             onClick={onNext}
             disabled={page >= totalPages}
           >

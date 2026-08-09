@@ -189,11 +189,11 @@ export default function ReportsPage() {
   const recentActivity = useMemo(() => visitHistory.slice(0, 5), [visitHistory]);
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col gap-2">
-        <p className="text-xs uppercase tracking-[0.4em] text-clay-600">Reports</p>
-        <h2 className="text-2xl font-semibold text-clay-900">Analytics and Audit Reports</h2>
-        <p className="text-sm text-clay-600">Review summaries, trends, and historical data.</p>
+    <div className="space-y-8">
+      <header className="flex flex-col gap-3">
+        <p className="eyebrow">Reporting workspace</p>
+        <h2 className="page-title">Reports and history</h2>
+        <p className="page-subtitle">Review operational trends, visit records, and exportable audit data.</p>
       </header>
 
       {error && (
