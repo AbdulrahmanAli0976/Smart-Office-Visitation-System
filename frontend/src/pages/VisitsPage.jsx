@@ -359,11 +359,11 @@ export default function VisitsPage() {
   }, [results, query]);
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col gap-2">
-        <p className="text-xs uppercase tracking-[0.4em] text-clay-600">Visits</p>
-        <h2 className="text-2xl font-semibold text-clay-900">Check-in and Manage Visits</h2>
-        <p className="text-sm text-clay-600">Handle arrivals, departures, and bulk processing.</p>
+    <div className="space-y-8">
+      <header className="flex flex-col gap-3">
+        <p className="eyebrow">Front desk operations</p>
+        <h2 className="page-title">Check-in and manage visits</h2>
+        <p className="page-subtitle">Find a visitor, capture the visit details, and keep the live queue accurate.</p>
       </header>
 
       <SearchBar
@@ -412,7 +412,7 @@ export default function VisitsPage() {
           {resultCards}
           {results.length > 0 && (
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-clay-600">
-              <span>Page {visitorPage} of {visitorTotalPages} ? Showing {results.length} of {visitorTotal}</span>
+              <span>Page {visitorPage} of {visitorTotalPages} · Showing {results.length} of {visitorTotal}</span>
               <div className="flex items-center gap-2">
                 <button
                   className="rounded-lg border border-clay-300 px-3 py-1 text-xs text-clay-700 disabled:opacity-60"

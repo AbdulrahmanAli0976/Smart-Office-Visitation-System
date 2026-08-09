@@ -12,22 +12,26 @@ export default function VisitorCard({ visitor, onSelect, onHistory }) {
   const badgeStyle = TYPE_STYLES[visitor.visitor_type] || 'bg-clay-200 text-clay-700 border-clay-200';
 
   return (
-    <div className="clay-card p-5 flex flex-col gap-3">
+    <article className="clay-card flex flex-col gap-4 p-5 transition hover:-translate-y-0.5 hover:shadow-md">
       <div className="flex items-center justify-between">
-        <h3 className="text-xl font-semibold text-clay-900">{visitor.full_name}</h3>
-        <span className={`text-xs font-semibold uppercase border px-3 py-1 rounded-full ${badgeStyle}`}>
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Visitor record</p>
+          <h3 className="mt-1 truncate text-lg font-bold text-slate-950">{visitor.full_name}</h3>
+        </div>
+        <span className={`ml-3 shrink-0 rounded-full border px-3 py-1 text-[10px] font-bold uppercase tracking-[0.1em] ${badgeStyle}`}>
           {visitor.visitor_type?.replace('_', ' ')}
         </span>
       </div>
-      <div className="text-sm text-clay-700">
-        <p>Phone: {visitor.phone_number}</p>
-        {visitor.code ? <p>Code: {visitor.code}</p> : <p>No code</p>}
+      <div className="grid gap-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-600 sm:grid-cols-2">
+        <div><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Phone</p><p className="mt-1 font-medium text-slate-800">{visitor.phone_number}</p></div>
+        <div><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400">Visitor code</p><p className="mt-1 font-medium text-slate-800">{visitor.code || 'Not assigned'}</p></div>
       </div>
       {(onSelect || onHistory) && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
           {onSelect && (
             <button
-              className="rounded-lg border border-clay-300 px-3 py-1 text-sm text-clay-700 hover:bg-clay-200"
+              type="button"
+              className="button-primary"
               onClick={() => onSelect(visitor)}
             >
               Use for check-in
@@ -35,7 +39,8 @@ export default function VisitorCard({ visitor, onSelect, onHistory }) {
           )}
           {onHistory && (
             <button
-              className="rounded-lg border border-clay-300 px-3 py-1 text-sm text-clay-700 hover:bg-clay-200"
+              type="button"
+              className="button-secondary"
               onClick={() => onHistory(visitor)}
             >
               View history
@@ -43,6 +48,6 @@ export default function VisitorCard({ visitor, onSelect, onHistory }) {
           )}
         </div>
       )}
-    </div>
+    </article>
   );
 }

@@ -163,11 +163,11 @@ export default function VisitorsPage() {
   }, [results, query]);
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col gap-2">
-        <p className="text-xs uppercase tracking-[0.4em] text-clay-600">Visitors</p>
-        <h2 className="text-2xl font-semibold text-clay-900">Search and View Visitors</h2>
-        <p className="text-sm text-clay-600">Find visitor records and review visit history.</p>
+    <div className="space-y-8">
+      <header className="flex flex-col gap-3">
+        <p className="eyebrow">Visitor directory</p>
+        <h2 className="page-title">Search visitors</h2>
+        <p className="page-subtitle">Find a visitor record quickly, then review their previous visits.</p>
       </header>
 
       <SearchBar
@@ -191,11 +191,17 @@ export default function VisitorsPage() {
         </div>
       )}
 
-      {resultCards}
+      <section>
+        <div className="mb-4 flex items-center justify-between">
+          <div><p className="eyebrow">Results</p><h3 className="section-title">Visitor records</h3></div>
+          {results.length > 0 && <span className="text-xs font-medium text-slate-500">{visitorTotal} total</span>}
+        </div>
+        {resultCards}
+      </section>
 
       {results.length > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-clay-600">
-          <span>Page {visitorPage} of {visitorTotalPages} ? Showing {results.length} of {visitorTotal}</span>
+          <span>Page {visitorPage} of {visitorTotalPages} · Showing {results.length} of {visitorTotal}</span>
           <div className="flex items-center gap-2">
             <button
               className="rounded-lg border border-clay-300 px-3 py-1 text-xs text-clay-700 disabled:opacity-60"
