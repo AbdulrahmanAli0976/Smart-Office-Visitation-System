@@ -1,4 +1,4 @@
-﻿import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 
 const TYPE_OPTIONS = [
   { value: 'BD', label: 'BD (Code required)' },
@@ -152,7 +152,8 @@ export default function BulkCheckInPanel({ onSubmit, loading, summary, error, di
               </div>
               <div className="flex items-start justify-end">
                 <button
-                  className="rounded-lg border border-clay-300 px-3 py-2 text-xs text-clay-700 disabled:opacity-50"
+                  type="button"
+                  className="button-secondary text-xs px-3 py-2"
                   onClick={() => removeRow(index)}
                   disabled={rows.length === 1 || disabled}
                 >
@@ -166,14 +167,16 @@ export default function BulkCheckInPanel({ onSubmit, loading, summary, error, di
 
       <div className="flex flex-wrap items-center gap-3">
         <button
-          className="rounded-lg border border-clay-300 px-3 py-2 text-xs text-clay-700 disabled:opacity-60"
+          type="button"
+          className="button-secondary text-xs px-3 py-2"
           onClick={addRow}
           disabled={rows.length >= MAX_ROWS || disabled}
         >
           Add Row
         </button>
         <button
-          className="rounded-xl bg-clay-800 px-5 py-2 text-sm text-white shadow-clay disabled:opacity-60"
+          type="button"
+          className="button-primary px-5 py-2"
           onClick={handleSubmit}
           disabled={disabled || loading || !hasRows}
         >
@@ -183,3 +186,4 @@ export default function BulkCheckInPanel({ onSubmit, loading, summary, error, di
     </section>
   );
 }
+

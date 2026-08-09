@@ -30,6 +30,9 @@ export default function VisitsPage() {
   const [searchError, setSearchError] = useState('');
   const [duplicates, setDuplicates] = useState([]);
 
+  // Selection state
+  const [selectedVisitor, setSelectedVisitor] = useState(null);
+
   const [visitorPage, setVisitorPage] = useState(1);
   const [visitorLimit] = useState(10);
   const [visitorTotalPages, setVisitorTotalPages] = useState(1);
@@ -164,21 +167,51 @@ export default function VisitsPage() {
   };
 
   const handleSelectVisitor = (visitor) => {
-    const pick = visitor.code || visitor.phone_number || visitor.full_name;
-    setQuery(pick || '');
+    // Map the actual properties from search response
+    setSelectedVisitor({
+      id: visitor.id,
+      full_name: visitor.full_name,
+      phone_number: visitor.phone_number,
+      visitor_type: visitor.visitor_type,
+      code: visitor.code
+    });
     setCreateNew(false);
-    setFieldErrors((prev) => ({ ...prev, query: '' }));
-    setMessage('Visitor selected. Complete check-in details and confirm.');
+    setFieldErrors((prev) => ({ ...prev, query: '', full_name: '', phone_number: '', visitor_type: '', code: '' }));
+    setMessage(`Visitor "${visitor.full_name}" selected. Complete check-in details and confirm.`);
+  };
+
+  const handleClearSelectedVisitor = () => {
+    setSelectedVisitor(null);
+    setMessage('');
+  };
+
+  const handleClearForm = () => {
+    setSelectedVisitor(null);
+    setCreateNew(false);
+    setQuery('');
+    setPurpose('');
+    setPersonToSee('');
+    setVisitorForm({
+      full_name: '',
+      phone_number: '',
+      visitor_type: 'BD',
+      code: ''
+    });
+    setFieldErrors({});
+    setMessage('');
+    setError('');
+    setSearchError('');
+    setResults([]);
   };
 
   const validateVisitorForm = () => {
     const errors = {};
 
-    if (!purpose.trim()) errors.purpose = 'Purpose is required.';
+    if (!purpose.trim()) errors.purpose = 'Purpose of visit is required.';
     if (!personToSee.trim()) errors.personToSee = 'Person to see is required.';
 
-    if (!query.trim() && !createNew) {
-      errors.query = 'Search or enable create new visitor.';
+    if (!selectedVisitor && !createNew) {
+      errors.query = 'Please search and select a visitor, or enable "Create new visitor".';
     }
 
     if (createNew) {
@@ -227,8 +260,13 @@ export default function VisitsPage() {
 
     setActionLoading(true);
     try {
+      // Map checkin query parameter to exact phone or code of selected visitor to prevent lookup ambiguity, or fallback to query text
+      const queryText = selectedVisitor
+        ? (selectedVisitor.phone_number || selectedVisitor.code || selectedVisitor.full_name)
+        : query.trim();
+
       const payload = {
-        query: query.trim(),
+        query: queryText,
         purpose: purpose.trim(),
         person_to_see: personToSee.trim(),
         visitor: createNew ? {
@@ -241,11 +279,26 @@ export default function VisitsPage() {
 
       const response = await api.checkIn(payload, token);
       await refreshActiveVisits();
+      
       if (createNew) {
         toast.success('Visitor created successfully');
       }
       toast.success('Visit checked in');
       setMessage('Visitor checked in successfully.');
+      
+      // Clear form inputs on success
+      setPurpose('');
+      setPersonToSee('');
+      setSelectedVisitor(null);
+      setQuery('');
+      setCreateNew(false);
+      setVisitorForm({
+        full_name: '',
+        phone_number: '',
+        visitor_type: 'BD',
+        code: ''
+      });
+      setResults([]);
       setDuplicates(response.duplicates || []);
     } catch (err) {
       if (!handleAuthFailure(err)) {
@@ -329,19 +382,42 @@ export default function VisitsPage() {
   };
 
   const resultCards = useMemo(() => {
+    const trimmed = query.trim();
+    if (loading) {
+      return (
+        <div className="rounded-2xl border border-slate-200 bg-white/70 px-6 py-8 text-center text-sm text-slate-500 shadow-inner">
+          <p className="font-semibold animate-pulse">Searching visitor records...</p>
+        </div>
+      );
+    }
     if (!results.length) {
-      const trimmed = query.trim();
       const title = trimmed
         ? `No results found for "${trimmed}"`
-        : 'Start typing to search visitors';
+        : 'Find an existing visitor';
       const subtitle = trimmed
-        ? 'Try a different name, phone, or code.'
-        : 'Search by code, phone, or name.';
+        ? 'Try a different name, phone, or code, or register them as a new visitor.'
+        : 'Search by visitor code, phone number, or full name to begin check-in.';
       return (
-        <div className="rounded-2xl border border-clay-200 bg-white/70 px-6 py-8 text-center text-sm text-clay-700 shadow-inner">
-          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-clay-200/70 text-xs uppercase tracking-[0.2em] text-clay-700">i</div>
+        <div className="rounded-2xl border border-slate-200 bg-white/70 px-6 py-8 text-center text-sm text-slate-600 shadow-inner">
+          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
           <p className="font-semibold">{title}</p>
-          <p className="mt-1 text-xs text-clay-600">{subtitle}</p>
+          <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
+          {trimmed && (
+            <button
+              type="button"
+              className="mt-4 button-secondary text-xs"
+              onClick={() => {
+                setSelectedVisitor(null);
+                setCreateNew(true);
+              }}
+            >
+              Create New Visitor
+            </button>
+          )}
         </div>
       );
     }
@@ -352,11 +428,12 @@ export default function VisitsPage() {
             key={visitor.id}
             visitor={visitor}
             onSelect={handleSelectVisitor}
+            isSelected={selectedVisitor?.id === visitor.id}
           />
         ))}
       </div>
     );
-  }, [results, query]);
+  }, [results, query, loading, selectedVisitor]);
 
   return (
     <div className="space-y-8">
@@ -401,28 +478,33 @@ export default function VisitsPage() {
       <section className="grid gap-6 lg:grid-cols-[2fr_1fr]">
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <h3 className="text-lg font-semibold">Search Results</h3>
-            <button
-              className="text-sm text-clay-700 underline"
-              onClick={() => setResults([])}
-            >
-              Clear
-            </button>
+            <h3 className="text-lg font-semibold text-slate-900">Search Results</h3>
+            {results.length > 0 && (
+              <button
+                type="button"
+                className="text-sm text-blue-600 hover:text-blue-700 font-semibold"
+                onClick={() => setResults([])}
+              >
+                Clear
+              </button>
+            )}
           </div>
           {resultCards}
-          {results.length > 0 && (
-            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-clay-600">
+          {!loading && results.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
               <span>Page {visitorPage} of {visitorTotalPages} · Showing {results.length} of {visitorTotal}</span>
               <div className="flex items-center gap-2">
                 <button
-                  className="rounded-lg border border-clay-300 px-3 py-1 text-xs text-clay-700 disabled:opacity-60"
+                  type="button"
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700 disabled:opacity-50 hover:bg-slate-50"
                   onClick={() => handleVisitorPageChange(visitorPage - 1)}
                   disabled={visitorPage <= 1}
                 >
                   Previous
                 </button>
                 <button
-                  className="rounded-lg border border-clay-300 px-3 py-1 text-xs text-clay-700 disabled:opacity-60"
+                  type="button"
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700 disabled:opacity-50 hover:bg-slate-50"
                   onClick={() => handleVisitorPageChange(visitorPage + 1)}
                   disabled={visitorPage >= visitorTotalPages}
                 >
@@ -435,17 +517,124 @@ export default function VisitsPage() {
 
         <div className="space-y-4">
           <QuickActions
-            onAddVisitor={() => setCreateNew(true)}
-            onCheckIn={handleCheckIn}
+            onAddVisitor={() => {
+              setSelectedVisitor(null);
+              setCreateNew(true);
+            }}
+            onClear={handleClearForm}
             disabled={actionLoading || !canManageVisits}
-            loading={actionLoading}
           />
+          
           <div className="clay-card p-5 space-y-4">
-            <h3 className="text-lg font-semibold">Check-in Details</h3>
-            <div className="space-y-3">
+            <div className="border-b border-slate-100 pb-3">
+              <p className="eyebrow">Step 2: Check-in Form</p>
+              <h3 className="text-lg font-bold text-slate-950">Check-in Details</h3>
+            </div>
+
+            {selectedVisitor ? (
+              <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-4 text-slate-900 shadow-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-600 font-bold text-white uppercase shadow-sm">
+                      {selectedVisitor.full_name?.charAt(0)?.toUpperCase() || 'V'}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-950 truncate">{selectedVisitor.full_name}</p>
+                      <p className="text-xs text-slate-600 truncate">
+                        {selectedVisitor.phone_number} {selectedVisitor.code ? `· Code: ${selectedVisitor.code}` : ''}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="rounded-full border border-blue-200 bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase text-blue-800 tracking-wide">
+                      {selectedVisitor.visitor_type?.replace('_', ' ')}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleClearSelectedVisitor}
+                      className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-slate-955 transition"
+                    >
+                      Change
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700 bg-slate-50 p-2.5 rounded-xl border border-slate-100 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={createNew}
+                    onChange={(event) => setCreateNew(event.target.checked)}
+                    className="rounded text-blue-600 focus:ring-blue-500"
+                  />
+                  <span>Create new visitor record</span>
+                </label>
+
+                {createNew ? (
+                  <div className="space-y-3 p-3 bg-slate-50/50 rounded-xl border border-slate-200">
+                    <div>
+                      <label htmlFor="new-full-name" className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Full Name</label>
+                      <input
+                        id="new-full-name"
+                        className={`w-full rounded-xl border ${fieldErrors.full_name ? 'border-red-300 bg-red-50/70' : 'border-slate-200 bg-white'} px-4 py-2 text-sm shadow-inner`}
+                        placeholder="Full name"
+                        value={visitorForm.full_name}
+                        onChange={(event) => setVisitorForm((prev) => ({ ...prev, full_name: event.target.value }))}
+                      />
+                      {fieldErrors.full_name && <p className="mt-1 text-xs text-red-600">{fieldErrors.full_name}</p>}
+                    </div>
+                    <div>
+                      <label htmlFor="new-phone-number" className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Phone Number</label>
+                      <input
+                        id="new-phone-number"
+                        className={`w-full rounded-xl border ${fieldErrors.phone_number ? 'border-red-300 bg-red-50/70' : 'border-slate-200 bg-white'} px-4 py-2 text-sm shadow-inner`}
+                        placeholder="Phone number"
+                        value={visitorForm.phone_number}
+                        onChange={(event) => setVisitorForm((prev) => ({ ...prev, phone_number: event.target.value }))}
+                      />
+                      {fieldErrors.phone_number && <p className="mt-1 text-xs text-red-600">{fieldErrors.phone_number}</p>}
+                    </div>
+                    <div>
+                      <label htmlFor="new-visitor-type" className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Visitor Type</label>
+                      <select
+                        id="new-visitor-type"
+                        className={`w-full rounded-xl border ${fieldErrors.visitor_type ? 'border-red-300 bg-red-50/70' : 'border-slate-200 bg-white'} px-4 py-2 text-sm shadow-inner`}
+                        value={visitorForm.visitor_type}
+                        onChange={(event) => setVisitorForm((prev) => ({ ...prev, visitor_type: event.target.value, code: '' }))}
+                      >
+                        {VISITOR_TYPES.map((type) => (
+                          <option key={type.value} value={type.value}>{type.label}</option>
+                        ))}
+                      </select>
+                      {fieldErrors.visitor_type && <p className="mt-1 text-xs text-red-600">{fieldErrors.visitor_type}</p>}
+                    </div>
+                    <div>
+                      <label htmlFor="new-visitor-code" className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Visitor Code (if required)</label>
+                      <input
+                        id="new-visitor-code"
+                        className={`w-full rounded-xl border ${fieldErrors.code ? 'border-red-300 bg-red-50/70' : 'border-slate-200 bg-white'} px-4 py-2 text-sm shadow-inner`}
+                        placeholder="Visitor code (if required)"
+                        value={visitorForm.code}
+                        onChange={(event) => setVisitorForm((prev) => ({ ...prev, code: event.target.value }))}
+                      />
+                      {fieldErrors.code && <p className="mt-1 text-xs text-red-600">{fieldErrors.code}</p>}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl border border-dashed border-slate-300 text-center text-xs text-slate-500">
+                    Please search and select a visitor above, or check the box to create a new visitor.
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="space-y-3 pt-3 border-t border-slate-100">
               <div>
+                <label htmlFor="visit-purpose" className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Purpose of Visit</label>
                 <input
-                  className={`w-full rounded-xl border ${fieldErrors.purpose ? 'border-red-300 bg-red-50/70' : 'border-white/70 bg-white/70'} px-4 py-2 text-sm shadow-inner`}
+                  id="visit-purpose"
+                  className={`w-full rounded-xl border ${fieldErrors.purpose ? 'border-red-300 bg-red-50/70' : 'border-slate-200 bg-slate-50'} px-4 py-2 text-sm shadow-inner`}
                   placeholder="Purpose of visit"
                   value={purpose}
                   onChange={(event) => setPurpose(event.target.value)}
@@ -453,8 +642,10 @@ export default function VisitsPage() {
                 {fieldErrors.purpose && <p className="mt-1 text-xs text-red-600">{fieldErrors.purpose}</p>}
               </div>
               <div>
+                <label htmlFor="visit-person-to-see" className="block text-xs font-semibold uppercase tracking-wider text-slate-500 mb-1">Person to See</label>
                 <input
-                  className={`w-full rounded-xl border ${fieldErrors.personToSee ? 'border-red-300 bg-red-50/70' : 'border-white/70 bg-white/70'} px-4 py-2 text-sm shadow-inner`}
+                  id="visit-person-to-see"
+                  className={`w-full rounded-xl border ${fieldErrors.personToSee ? 'border-red-300 bg-red-50/70' : 'border-slate-200 bg-slate-50'} px-4 py-2 text-sm shadow-inner`}
                   placeholder="Person to see"
                   value={personToSee}
                   onChange={(event) => setPersonToSee(event.target.value)}
@@ -462,65 +653,17 @@ export default function VisitsPage() {
                 {fieldErrors.personToSee && <p className="mt-1 text-xs text-red-600">{fieldErrors.personToSee}</p>}
               </div>
             </div>
-            <label className="flex items-center gap-2 text-sm text-clay-700">
-              <input
-                type="checkbox"
-                checked={createNew}
-                onChange={(event) => setCreateNew(event.target.checked)}
-              />
-              Create new visitor if not found
-            </label>
-            {createNew && (
-              <div className="space-y-3">
-                <div>
-                  <input
-                    className={`w-full rounded-xl border ${fieldErrors.full_name ? 'border-red-300 bg-red-50/70' : 'border-white/70 bg-white/70'} px-4 py-2 text-sm shadow-inner`}
-                    placeholder="Full name"
-                    value={visitorForm.full_name}
-                    onChange={(event) => setVisitorForm((prev) => ({ ...prev, full_name: event.target.value }))}
-                  />
-                  {fieldErrors.full_name && <p className="mt-1 text-xs text-red-600">{fieldErrors.full_name}</p>}
-                </div>
-                <div>
-                  <input
-                    className={`w-full rounded-xl border ${fieldErrors.phone_number ? 'border-red-300 bg-red-50/70' : 'border-white/70 bg-white/70'} px-4 py-2 text-sm shadow-inner`}
-                    placeholder="Phone number"
-                    value={visitorForm.phone_number}
-                    onChange={(event) => setVisitorForm((prev) => ({ ...prev, phone_number: event.target.value }))}
-                  />
-                  {fieldErrors.phone_number && <p className="mt-1 text-xs text-red-600">{fieldErrors.phone_number}</p>}
-                </div>
-                <div>
-                  <select
-                    className={`w-full rounded-xl border ${fieldErrors.visitor_type ? 'border-red-300 bg-red-50/70' : 'border-white/70 bg-white/70'} px-4 py-2 text-sm shadow-inner`}
-                    value={visitorForm.visitor_type}
-                    onChange={(event) => setVisitorForm((prev) => ({ ...prev, visitor_type: event.target.value, code: '' }))}
-                  >
-                    {VISITOR_TYPES.map((type) => (
-                      <option key={type.value} value={type.value}>{type.label}</option>
-                    ))}
-                  </select>
-                  {fieldErrors.visitor_type && <p className="mt-1 text-xs text-red-600">{fieldErrors.visitor_type}</p>}
-                </div>
-                <div>
-                  <input
-                    className={`w-full rounded-xl border ${fieldErrors.code ? 'border-red-300 bg-red-50/70' : 'border-white/70 bg-white/70'} px-4 py-2 text-sm shadow-inner`}
-                    placeholder="Visitor code (if required)"
-                    value={visitorForm.code}
-                    onChange={(event) => setVisitorForm((prev) => ({ ...prev, code: event.target.value }))}
-                  />
-                  {fieldErrors.code && <p className="mt-1 text-xs text-red-600">{fieldErrors.code}</p>}
-                </div>
-              </div>
-            )}
+
             <button
-              className="w-full rounded-xl bg-clay-800 text-white py-3 shadow-clay disabled:opacity-60"
+              type="button"
+              className="w-full button-primary py-3 text-base justify-center shadow-sm"
               onClick={handleCheckIn}
               disabled={actionLoading || !canManageVisits}
             >
-              {actionLoading ? 'Processing...' : 'Confirm Check-in'}
+              {actionLoading ? 'Processing check-in...' : 'Confirm Check-in'}
             </button>
           </div>
+          
           <BulkCheckInPanel
             onSubmit={handleBulkCheckIn}
             loading={bulkLoading}
