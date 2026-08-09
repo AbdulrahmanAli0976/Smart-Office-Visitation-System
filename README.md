@@ -1,4 +1,4 @@
-# Smart Attendance System
+# Smart Office Visitation System
 
 ## Overview
 
