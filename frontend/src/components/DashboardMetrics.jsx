@@ -18,25 +18,23 @@ export default function DashboardMetrics({ metrics, loading, isAdmin }) {
   }
 
   return (
-    <section className="clay-card p-5 space-y-4">
+    <section className="space-y-4">
       <div>
-        <p className="text-xs uppercase tracking-[0.3em] text-clay-600">Dashboard</p>
-        <h3 className="text-lg font-semibold text-clay-900">Live Metrics</h3>
+        <p className="eyebrow">Today at a glance</p>
+        <h3 className="section-title">Operational metrics</h3>
       </div>
-      {loading && <p className="text-sm text-clay-600">Loading metrics...</p>}
+      {loading && <div className="rounded-2xl border border-slate-200 bg-white px-5 py-6 text-sm text-slate-500 shadow-sm">Loading operational metrics...</div>}
       {!loading && (
-        <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             {items.map((item) => (
-              <div key={item.label} className="rounded-xl bg-white/70 px-4 py-3 shadow-inner">
-                <p className="text-xs uppercase tracking-[0.2em] text-clay-500">{item.label}</p>
-                <p className="mt-2 text-2xl font-semibold text-clay-900">{item.value}</p>
+              <div key={item.label} className="stat-card">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">{item.label}</p>
+                <p className="mt-3 font-display text-3xl font-bold tracking-tight text-slate-950">{item.value}</p>
               </div>
             ))}
           </div>
-          <p className="text-xs text-clay-600">Peak hour today: {formatPeak(metrics?.peak_visit_hour)}</p>
-        </>
       )}
+      {!loading && <p className="text-xs text-slate-500">Peak hour today: {formatPeak(metrics?.peak_visit_hour)}</p>}
     </section>
   );
 }

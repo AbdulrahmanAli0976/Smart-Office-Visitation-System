@@ -8,38 +8,51 @@ const TYPE_COLORS = {
 };
 
 export default function ActiveVisitors({ visits, onCheckout, loading, canManage = true }) {
+  const handleCheckout = (visit) => {
+    const confirmed = window.confirm(`Check out ${visit.full_name}?`);
+    if (confirmed) onCheckout(visit.visit_id);
+  };
+
   return (
-    <div className="clay-card p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold">Active Visitors</h3>
-        <span className="text-sm text-clay-600">{visits.length} active</span>
+    <section className="clay-card overflow-hidden">
+      <div className="flex flex-col gap-2 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="eyebrow">Live queue</p>
+          <h3 className="section-title">Active visits</h3>
+        </div>
+        <span className="status-pill status-pill-success">{visits.length} active</span>
       </div>
-      <div className="space-y-4">
-        {visits.length === 0 && (
-          <p className="text-sm text-clay-600">No active visits yet.</p>
+      <div className="divide-y divide-slate-100">
+        {loading && <p className="px-5 py-8 text-sm text-slate-500">Loading active visits...</p>}
+        {!loading && visits.length === 0 && (
+          <div className="px-5 py-10 text-center">
+            <p className="text-sm font-semibold text-slate-800">No active visits</p>
+            <p className="mt-1 text-sm text-slate-500">New check-ins will appear here in real time.</p>
+          </div>
         )}
-        {visits.map((visit) => (
-          <div key={visit.visit_id} className="flex flex-col gap-3 rounded-xl bg-white/70 px-4 py-3 shadow-inner md:flex-row md:items-center md:justify-between">
+        {!loading && visits.map((visit) => (
+          <div key={visit.visit_id} className="flex flex-col gap-4 px-5 py-4 transition hover:bg-slate-50 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-3">
-              <span className={`h-3 w-3 rounded-full ${TYPE_COLORS[visit.visitor_type] || 'bg-clay-500'} glow-dot`} />
+              <span className={`h-3 w-3 rounded-full ${TYPE_COLORS[visit.visitor_type] || 'bg-slate-400'} glow-dot`} />
               <div>
-                <p className="font-medium text-clay-900">{visit.full_name}</p>
-                <p className="text-xs text-clay-600">
+                <p className="font-semibold text-slate-900">{visit.full_name}</p>
+                <p className="mt-1 text-xs text-slate-500">
                   {visit.visitor_type?.replace('_', ' ')} · Checked in {new Date(visit.time_in).toLocaleTimeString()}
                 </p>
-                <p className="text-xs text-clay-600">Officer: {visit.officer_name}</p>
+                <p className="mt-1 text-xs text-slate-500">To see {visit.person_to_see || '—'} · {visit.officer_name}</p>
               </div>
             </div>
             <button
-              className="self-start rounded-lg border border-clay-300 px-3 py-1 text-sm text-clay-700 hover:bg-clay-200 disabled:opacity-60 md:self-auto"
-              onClick={() => onCheckout(visit.visit_id)}
+              type="button"
+              className="button-secondary self-start md:self-auto"
+              onClick={() => handleCheckout(visit)}
               disabled={loading || !canManage}
             >
-              Check-out
+              Check out
             </button>
           </div>
         ))}
       </div>
-    </div>
+    </section>
   );
 }

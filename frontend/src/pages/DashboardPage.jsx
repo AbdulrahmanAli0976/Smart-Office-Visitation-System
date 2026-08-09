@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import ActiveVisitors from '../components/ActiveVisitors.jsx';
 import DashboardMetrics from '../components/DashboardMetrics.jsx';
@@ -8,6 +9,7 @@ import { toast } from 'react-hot-toast';
 
 export default function DashboardPage() {
   const { token, user, isAdmin, canManageVisits, handleAuthFailure } = useAuth();
+  const navigate = useNavigate();
   const [metrics, setMetrics] = useState(null);
   const [metricsLoading, setMetricsLoading] = useState(false);
   const [activeVisits, setActiveVisits] = useState([]);
@@ -73,11 +75,14 @@ export default function DashboardPage() {
   }, [token, user, isAdmin]);
 
   return (
-    <div className="space-y-6">
-      <header className="flex flex-col gap-2">
-        <p className="text-xs uppercase tracking-[0.4em] text-clay-600">Dashboard</p>
-        <h2 className="text-2xl font-semibold text-clay-900">Live Operations Overview</h2>
-        <p className="text-sm text-clay-600">Track real-time visits and system activity.</p>
+    <div className="space-y-8">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="eyebrow">Operations dashboard</p>
+          <h2 className="page-title">Good to see you, {user?.full_name?.split(' ')[0] || 'there'}</h2>
+          <p className="page-subtitle">Monitor arrivals and keep today’s front desk moving.</p>
+        </div>
+        <span className="status-pill status-pill-success">Live operations</span>
       </header>
 
       {error && (
@@ -89,15 +94,33 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {isAdmin && (
-        <DashboardMetrics metrics={metrics} loading={metricsLoading} isAdmin={isAdmin} />
-      )}
+      {isAdmin && <DashboardMetrics metrics={metrics} loading={metricsLoading} isAdmin={isAdmin} />}
 
       {!isAdmin && (
         <div className="rounded-2xl border border-clay-200 bg-white/70 px-5 py-4 text-sm text-clay-700 shadow-inner">
           Admin-only metrics are hidden for officer accounts. Use Visits and Reports for operational views.
         </div>
       )}
+
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { label: 'Check-in visitor', description: 'Start a new arrival', to: '/visits', primary: true },
+          { label: 'Find a visitor', description: 'Search by name, phone, or code', to: '/visitors' },
+          { label: 'View history', description: 'Review recent visit records', to: '/reports' },
+          { label: 'Active visits', description: `${activeVisits.length} currently open`, to: '/visits' }
+        ].map((action) => (
+          <button
+            key={action.label}
+            type="button"
+            onClick={() => navigate(action.to)}
+            className={`action-card text-left ${action.primary ? 'action-card-primary' : ''}`}
+          >
+            <span className="text-sm font-semibold">{action.label}</span>
+            <span className="mt-1 block text-xs opacity-75">{action.description}</span>
+            <span className="mt-4 block text-lg" aria-hidden="true">→</span>
+          </button>
+        ))}
+      </section>
 
       <ActiveVisitors
         visits={activeVisits}
