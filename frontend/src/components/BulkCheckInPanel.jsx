@@ -85,10 +85,10 @@ export default function BulkCheckInPanel({ onSubmit, loading, summary, error, di
     <section className="clay-card p-5 space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-clay-600">Bulk Check-In</p>
-          <h3 className="text-lg font-semibold text-clay-900">Process multiple visitors</h3>
+          <p className="eyebrow">Bulk Check-In</p>
+          <h3 className="section-title">Process multiple visitors</h3>
         </div>
-        <span className="text-xs text-clay-600">{rows.length}/{MAX_ROWS}</span>
+        <span className="text-xs font-semibold text-slate-500">{rows.length}/{MAX_ROWS}</span>
       </div>
 
       {error && (

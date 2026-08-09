@@ -1,4 +1,4 @@
-import React from 'react';
+ï»¿import React from 'react';
 
 export default function VisitorHistoryPanel({ visitor, visits, onClose }) {
   if (!visitor) return null;
@@ -7,25 +7,26 @@ export default function VisitorHistoryPanel({ visitor, visits, onClose }) {
     <section className="clay-card p-5 space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.3em] text-clay-600">Visitor</p>
-          <h3 className="text-lg font-semibold text-clay-900">History for {visitor.full_name}</h3>
-          <p className="text-sm text-clay-600">{visitor.phone_number}</p>
+          <p className="eyebrow">Visitor</p>
+          <h3 className="section-title">History for {visitor.full_name}</h3>
+          <p className="mt-0.5 text-xs font-medium text-slate-500">{visitor.phone_number}</p>
         </div>
         <button
-          className="rounded-lg border border-clay-300 px-3 py-1 text-sm text-clay-700 hover:bg-clay-200"
+          type="button"
+          className="button-secondary text-xs px-3 py-1.5"
           onClick={onClose}
         >
           Close
         </button>
       </div>
 
-      {visits.length === 0 && <p className="text-sm text-clay-600">No visit history available.</p>}
+      {visits.length === 0 && <p className="text-sm text-slate-500">No visit history available.</p>}
 
       {visits.length > 0 && (
         <div className="overflow-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs text-slate-700">
             <thead>
-              <tr className="text-left text-clay-600">
+              <tr className="text-left text-slate-400 font-semibold uppercase tracking-wider">
                 <th className="pb-2">Purpose</th>
                 <th className="pb-2">Person to See</th>
                 <th className="pb-2">Check-in</th>
@@ -34,16 +35,20 @@ export default function VisitorHistoryPanel({ visitor, visits, onClose }) {
                 <th className="pb-2">Status</th>
               </tr>
             </thead>
-            <tbody className="text-clay-800">
+            <tbody className="divide-y divide-slate-100 text-slate-900">
               {visits.map((visit) => (
-                <tr key={visit.visit_id} className="border-t border-white/70">
-                  <td className="py-2">{visit.purpose}</td>
-                  <td className="py-2">{visit.person_to_see}</td>
-                  <td className="py-2">{new Date(visit.time_in).toLocaleString()}</td>
-                  <td className="py-2">{visit.time_out ? new Date(visit.time_out).toLocaleString() : '—'}</td>
-                  <td className="py-2">{visit.officer_name}</td>
-                  <td className="py-2">
-                    <span className={`rounded-full px-2 py-1 text-xs ${visit.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-clay-200 text-clay-700'}`}>
+                <tr key={visit.visit_id} className="hover:bg-slate-50/50">
+                  <td className="py-2.5 font-medium">{visit.purpose}</td>
+                  <td className="py-2.5">{visit.person_to_see}</td>
+                  <td className="py-2.5 text-slate-500">{new Date(visit.time_in).toLocaleString()}</td>
+                  <td className="py-2.5 text-slate-500">{visit.time_out ? new Date(visit.time_out).toLocaleString() : '-'}</td>
+                  <td className="py-2.5 text-slate-600">{visit.officer_name}</td>
+                  <td className="py-2.5">
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                      visit.status === 'ACTIVE'
+                        ? 'bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-200'
+                        : 'bg-slate-100 text-slate-600'
+                    }`}>
                       {visit.status}
                     </span>
                   </td>

@@ -142,10 +142,14 @@ export default function VisitorsPage() {
         ? 'Try a different name, phone, or code.'
         : 'Search by code, phone, or name.';
       return (
-        <div className="rounded-2xl border border-clay-200 bg-white/70 px-6 py-8 text-center text-sm text-clay-700 shadow-inner">
-          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-clay-200/70 text-xs uppercase tracking-[0.2em] text-clay-700">i</div>
-          <p className="font-semibold">{title}</p>
-          <p className="mt-1 text-xs text-clay-600">{subtitle}</p>
+        <div className="rounded-2xl border border-slate-200 bg-white/70 px-6 py-8 text-center text-sm text-slate-600 shadow-inner">
+          <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-5 w-5" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </div>
+          <p className="font-semibold text-slate-900">{title}</p>
+          <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
         </div>
       );
     }
@@ -200,18 +204,20 @@ export default function VisitorsPage() {
       </section>
 
       {results.length > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-clay-600">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
           <span>Page {visitorPage} of {visitorTotalPages} · Showing {results.length} of {visitorTotal}</span>
           <div className="flex items-center gap-2">
             <button
-              className="rounded-lg border border-clay-300 px-3 py-1 text-xs text-clay-700 disabled:opacity-60"
+              type="button"
+              className="button-secondary text-xs px-3 py-1"
               onClick={() => handleVisitorPageChange(visitorPage - 1)}
               disabled={visitorPage <= 1}
             >
               Previous
             </button>
             <button
-              className="rounded-lg border border-clay-300 px-3 py-1 text-xs text-clay-700 disabled:opacity-60"
+              type="button"
+              className="button-secondary text-xs px-3 py-1"
               onClick={() => handleVisitorPageChange(visitorPage + 1)}
               disabled={visitorPage >= visitorTotalPages}
             >
@@ -222,7 +228,7 @@ export default function VisitorsPage() {
       )}
 
       {visitorHistoryLoading && (
-        <div className="clay-card px-5 py-3 text-sm text-clay-600">Loading visitor history...</div>
+        <div className="clay-card px-5 py-3 text-sm text-slate-500 font-medium animate-pulse">Loading visitor history...</div>
       )}
 
       {selectedVisitor && !visitorHistoryLoading && (

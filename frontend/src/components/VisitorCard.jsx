@@ -9,7 +9,7 @@ const TYPE_STYLES = {
 
 export default function VisitorCard({ visitor, onSelect, onHistory, isSelected = false }) {
   if (!visitor) return null;
-  const badgeStyle = TYPE_STYLES[visitor.visitor_type] || 'bg-clay-200 text-clay-700 border-clay-200';
+  const badgeStyle = TYPE_STYLES[visitor.visitor_type] || 'bg-slate-100 text-slate-700 border-slate-200';
 
   return (
     <article

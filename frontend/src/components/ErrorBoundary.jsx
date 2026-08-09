@@ -25,18 +25,19 @@ export default class ErrorBoundary extends React.Component {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-[radial-gradient(circle_at_top,_#f7f4f0,_#e4d6c7_55%,_#d5c2ab)] px-4">
-          <div className="clay-card max-w-lg p-6 text-center">
-            <p className="text-xs uppercase tracking-[0.3em] text-clay-600">Unexpected error</p>
-            <h1 className="mt-3 text-2xl font-semibold text-clay-900">Something went wrong</h1>
-            <p className="mt-2 text-sm text-clay-700">
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+          <div className="rounded-2xl border border-slate-200 bg-white max-w-lg p-8 text-center shadow-xl space-y-4">
+            <p className="eyebrow">Unexpected error</p>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-950">Something went wrong</h1>
+            <p className="text-sm text-slate-600">
               Please refresh the page. If the issue persists, contact support.
             </p>
             <button
-              className="mt-5 rounded-xl bg-clay-800 px-6 py-3 text-white shadow-clay"
+              type="button"
+              className="button-primary px-6 py-2.5 shadow-sm inline-flex items-center justify-center"
               onClick={() => window.location.reload()}
             >
-              Reload
+              Reload Page
             </button>
           </div>
         </div>

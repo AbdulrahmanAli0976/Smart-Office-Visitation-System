@@ -97,7 +97,7 @@ export default function DashboardPage() {
       {isAdmin && <DashboardMetrics metrics={metrics} loading={metricsLoading} isAdmin={isAdmin} />}
 
       {!isAdmin && (
-        <div className="rounded-2xl border border-clay-200 bg-white/70 px-5 py-4 text-sm text-clay-700 shadow-inner">
+        <div className="rounded-2xl border border-slate-200 bg-white px-5 py-4 text-sm font-medium text-slate-600 shadow-sm">
           Admin-only metrics are hidden for officer accounts. Use Visits and Reports for operational views.
         </div>
       )}
