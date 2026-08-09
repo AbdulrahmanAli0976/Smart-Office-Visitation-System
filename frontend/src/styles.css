@@ -8,14 +8,93 @@
   color-scheme: light;
 }
 
+@layer base {
+  body {
+    @apply bg-slate-100 text-slate-900 antialiased;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2;
+  }
+}
+
 body {
   font-family: 'Outfit', sans-serif;
 }
 
-.clay-card {
-  @apply bg-clay-100 rounded-xl shadow-clay border border-white/70;
+@layer components {
+  .app-shell {
+    @apply flex h-screen overflow-hidden bg-slate-100;
+  }
+
+  .app-sidebar {
+    @apply fixed inset-y-0 left-0 z-40 flex w-72 -translate-x-full flex-col border-r border-slate-200 bg-white px-5 py-5 shadow-xl transition-transform duration-200 lg:sticky lg:top-0 lg:z-20 lg:h-screen lg:translate-x-0 lg:shadow-none;
+  }
+
+  .app-sidebar-open {
+    @apply translate-x-0;
+  }
+
+  .app-main {
+    @apply min-w-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-6 lg:px-10 lg:py-8;
+  }
+
+  .app-mobile-bar {
+    @apply mb-6 flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm lg:hidden;
+  }
+
+  .brand-mark {
+    @apply flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 font-display text-lg font-bold text-white shadow-sm;
+  }
+
+  .avatar-mark {
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700;
+  }
+
+  .account-card {
+    @apply rounded-2xl border border-slate-200 bg-slate-50 p-3;
+  }
+
+  .nav-section-label {
+    @apply px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400;
+  }
+
+  .nav-link {
+    @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950;
+  }
+
+  .nav-link-active {
+    @apply bg-blue-50 text-blue-700 shadow-sm ring-1 ring-inset ring-blue-100;
+  }
+
+  .nav-link-hint {
+    @apply mt-0.5 block text-[11px] font-medium text-slate-400;
+  }
+
+  .nav-link-active .nav-link-hint {
+    @apply text-blue-500;
+  }
+
+  .icon-button {
+    @apply inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:border-slate-300 hover:text-slate-950;
+  }
+
+  .status-pill {
+    @apply inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em];
+  }
+
+  .status-pill-neutral {
+    @apply bg-slate-100 text-slate-600;
+  }
+
+  .clay-card {
+    @apply rounded-2xl border border-slate-200 bg-white shadow-sm;
+  }
 }
 
 .glow-dot {
-  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.7);
+  box-shadow: 0 0 0 6px rgba(255, 255, 255, 0.9);
 }

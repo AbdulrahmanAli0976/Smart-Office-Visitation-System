@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { BrowserRouter, Navigate, Outlet, Route, Routes, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import Sidebar from './components/Sidebar.jsx';
 import LoginPage from './pages/LoginPage.jsx';
@@ -14,10 +14,47 @@ import { api, setLoggingOut } from './api.js';
 import { USER_ROLES, MANAGE_VISITS_ROLES } from './utils/roles.js';
 
 function AppLayout({ user, isAdmin, onLogout }) {
+  const location = useLocation();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [location.pathname]);
+
   return (
-    <div className="h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_#f7f4f0,_#e4d6c7_55%,_#d5c2ab)] flex">
-      <Sidebar user={user} isAdmin={isAdmin} onLogout={onLogout} />
-      <main className="flex-1 overflow-y-auto px-6 py-8">
+    <div className="app-shell">
+      <Sidebar
+        user={user}
+        isAdmin={isAdmin}
+        onLogout={onLogout}
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
+      {sidebarOpen && (
+        <button
+          type="button"
+          aria-label="Close navigation"
+          className="fixed inset-0 z-30 bg-slate-950/40 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+      <main className="app-main">
+        <div className="app-mobile-bar">
+          <button
+            type="button"
+            aria-label="Open navigation"
+            aria-expanded={sidebarOpen}
+            className="icon-button"
+            onClick={() => setSidebarOpen(true)}
+          >
+            <span aria-hidden="true" className="text-xl">☰</span>
+          </button>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Visitor Management</p>
+            <p className="text-sm font-semibold text-slate-900">Operations workspace</p>
+          </div>
+          <span className="ml-auto status-pill status-pill-neutral">{user?.role}</span>
+        </div>
         <Outlet />
       </main>
     </div>
