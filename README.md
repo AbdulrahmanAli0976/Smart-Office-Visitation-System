@@ -2,7 +2,7 @@
 
 ## Overview
 
-Smart Attendance System is an enterprise-grade visitor management platform with role-based access control, audit logging, visitor tracking, and reporting.
+Smart Office Visitation System is an enterprise-grade visitor management platform with role-based access control, audit logging, visitor tracking, and reporting.
 
 ## Repository Structure
 
