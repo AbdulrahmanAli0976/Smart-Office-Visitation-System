@@ -161,6 +161,14 @@ export async function ensureCoreTables() {
       INDEX idx_audit_created_at (created_at)
     )`
   );
+
+  await pool.execute(
+    `CREATE TABLE IF NOT EXISTS system_settings (
+      setting_key VARCHAR(100) PRIMARY KEY,
+      setting_value TEXT NOT NULL,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )`
+  );
 }
 
 export const db = {

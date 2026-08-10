@@ -1,5 +1,6 @@
 import express from 'express';
 import { listOfficers, listOfficersPaged, updateOfficerStatus, deleteOfficer } from '../services/userService.js';
+import { getMaintenanceStatus, setMaintenanceMode } from '../services/systemService.js';
 import { requireAuth, requireRole, requireActiveOfficer } from '../middleware/auth.js';
 import { recordAuditEvent } from '../services/auditService.js';
 import { ADMIN_ROLES } from '../config/roles.js';
@@ -125,6 +126,36 @@ router.delete('/officers/:id', async (req, res, next) => {
     });
   } catch (err) {
     logger.error('admin.delete_officer_failed', { operation: 'DELETE_OFFICER', adminId, error: err.message });
+    return next(err);
+  }
+});
+
+router.get('/maintenance', async (req, res, next) => {
+  try {
+    const status = await getMaintenanceStatus(true);
+    return ok(res, status);
+  } catch (err) {
+    return next(err);
+  }
+});
+
+router.post('/maintenance', async (req, res, next) => {
+  const adminId = req.user?.id;
+  try {
+    const { enabled, message } = req.body || {};
+    const status = await setMaintenanceMode({ enabled, message });
+    logger.info('admin.update_maintenance_success', { operation: 'UPDATE_MAINTENANCE', adminId, enabled: status.maintenance });
+    await recordAuditEvent({
+      userId: adminId,
+      eventType: 'admin.update_maintenance',
+      resourceType: 'system',
+      resourceId: 'maintenance_mode',
+      details: { maintenance: status.maintenance, message: status.message },
+      ipAddress: req.ip
+    });
+    return ok(res, status);
+  } catch (err) {
+    logger.error('admin.update_maintenance_failed', { operation: 'UPDATE_MAINTENANCE', adminId, error: err.message });
     return next(err);
   }
 });

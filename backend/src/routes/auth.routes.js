@@ -1,11 +1,12 @@
-﻿import express from 'express';
+import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import rateLimit from 'express-rate-limit';
 import { env } from '../config/env.js';
 import { createOfficer, findUserByEmail } from '../services/userService.js';
 import { blacklistToken } from '../services/authService.js';
 import { recordAuditEvent } from '../services/auditService.js';
+import { applyProgressiveDelay, recordFailedAttempt, resetAttempts } from '../services/loginThrottler.js';
+import { getMaintenanceStatus } from '../services/systemService.js';
 import { requireAuth } from '../middleware/auth.js';
 import { ACTIVE_ROLES, USER_ROLES } from '../config/roles.js';
 import { isEmail, isNonEmptyString, isStrongPassword } from '../utils/validators.js';
@@ -14,16 +15,6 @@ import { ok, fail } from '../utils/response.js';
 import { logger } from '../utils/logger.js';
 
 const router = express.Router();
-
-const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // 10 attempts
-  keyGenerator: (req) => (req.user && req.user.id != null ? `user:${req.user.id}` : `ip:${req.ip}`),
-  handler: (req, res) => {
-    logger.warn('auth.login_rate_limited', { operation: 'LOGIN_ATTEMPT', email: req.body?.email, ip: req.ip });
-    return fail(res, 'Too many login attempts. Please try again later.', 429);
-  }
-});
 
 router.post('/register', async (req, res, next) => {
   try {
@@ -59,40 +50,76 @@ router.post('/register', async (req, res, next) => {
   }
 });
 
-router.post('/login', loginLimiter, async (req, res, next) => {
+router.post('/login', async (req, res, next) => {
   try {
     const { email, password } = req.body || {};
     const normalizedEmail = String(email || '').trim().toLowerCase();
 
+    // 1. Apply progressive delay (scoped to IP + normalizedEmail)
+    await applyProgressiveDelay(req.ip, normalizedEmail);
+
+    // 2. Validate payload format
     if (!isEmail(normalizedEmail) || !isNonEmptyString(password)) {
       logger.warn('auth.login_failed', { operation: 'LOGIN', reason: 'invalid_payload', email: normalizedEmail });
-      return fail(res, 'Invalid login credentials', 400);
+      const failedCount = recordFailedAttempt(req.ip, normalizedEmail);
+      if (failedCount >= 6) {
+        res.setHeader('Retry-After', '30');
+        return fail(res, 'Too many sign-in attempts. Please wait a moment before trying again.', 429, { retryAfter: 30 });
+      }
+      return fail(res, 'Unable to sign in with those credentials.', 400);
     }
 
+    // 3. Find user
     const user = await findUserByEmail(normalizedEmail);
     if (!user) {
       logger.warn('auth.login_failed', { operation: 'LOGIN', reason: 'user_not_found', email: normalizedEmail });
-      return fail(res, 'Invalid email or password', 401);
+      const failedCount = recordFailedAttempt(req.ip, normalizedEmail);
+      if (failedCount >= 6) {
+        res.setHeader('Retry-After', '30');
+        return fail(res, 'Too many sign-in attempts. Please wait a moment before trying again.', 429, { retryAfter: 30 });
+      }
+      return fail(res, 'Unable to sign in with those credentials.', 401);
     }
 
     const role = normalizeRole(user.role);
     const status = normalizeStatus(user.status);
 
     if (!ACTIVE_ROLES.has(role)) {
-      logger.warn('auth.login_failed', { operation: 'LOGIN', reason: 'invalid_role', email, role });
+      logger.warn('auth.login_failed', { operation: 'LOGIN', reason: 'invalid_role', email: normalizedEmail, role });
       return fail(res, 'Account configuration error', 403);
     }
 
     if (status !== 'ACTIVE') {
-      logger.warn('auth.login_failed', { operation: 'LOGIN', reason: 'inactive', email, status, role });
+      logger.warn('auth.login_failed', { operation: 'LOGIN', reason: 'inactive', email: normalizedEmail, status, role });
       return fail(res, 'Account not active.', 403);
     }
 
+    // 4. Maintenance Mode Check for non-admin logins
+    if (role !== USER_ROLES.ADMIN) {
+      const maintenanceState = await getMaintenanceStatus();
+      if (maintenanceState.maintenance) {
+        logger.warn('auth.login_blocked_maintenance', { operation: 'LOGIN', email: normalizedEmail, role });
+        return fail(res, 'Visitor Hub is temporarily unavailable while maintenance is in progress.', 503, {
+          maintenance: true,
+          message: maintenanceState.message
+        });
+      }
+    }
+
+    // 5. Password Verification
     const okPassword = await bcrypt.compare(password, user.password_hash);
     if (!okPassword) {
-      logger.warn('auth.login_failed', { operation: 'LOGIN', reason: 'bad_password', email });
-      return fail(res, 'Invalid email or password', 401);
+      logger.warn('auth.login_failed', { operation: 'LOGIN', reason: 'bad_password', email: normalizedEmail });
+      const failedCount = recordFailedAttempt(req.ip, normalizedEmail);
+      if (failedCount >= 6) {
+        res.setHeader('Retry-After', '30');
+        return fail(res, 'Too many sign-in attempts. Please wait a moment before trying again.', 429, { retryAfter: 30 });
+      }
+      return fail(res, 'Unable to sign in with those credentials.', 401);
     }
+
+    // 6. SUCCESSFUL AUTHENTICATION -> Immediately reset attempts counter for (IP, email)
+    resetAttempts(req.ip, normalizedEmail);
 
     const token = jwt.sign(
       { userId: user.id, id: user.id, role, email: user.email, status, full_name: user.full_name },

@@ -61,6 +61,12 @@ function fireAuthLogout(reason) {
   }
 }
 
+function fireMaintenance(message) {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('auth:maintenance', { detail: { message } }));
+  }
+}
+
 async function request(path, { method = 'GET', body, token, signal } = {}) {
   assertNotLoggingOut();
   const url = `${API_BASE}${path}`;
@@ -99,6 +105,15 @@ async function request(path, { method = 'GET', body, token, signal } = {}) {
     const err = new Error(error);
     err.status = 401;
     err.isAuthError = true;
+    throw err;
+  }
+
+  if (res.status === 503 && data?.maintenance) {
+    const error = data?.error || 'Visitor Hub is temporarily unavailable while maintenance is in progress.';
+    fireMaintenance(data?.message || error);
+    const err = new Error(error);
+    err.status = 503;
+    err.isMaintenance = true;
     throw err;
   }
 
@@ -153,6 +168,15 @@ async function requestWithPagination(path, { method = 'GET', body, token, signal
     const err = new Error(error);
     err.status = 401;
     err.isAuthError = true;
+    throw err;
+  }
+
+  if (res.status === 503 && data?.maintenance) {
+    const error = data?.error || 'Visitor Hub is temporarily unavailable while maintenance is in progress.';
+    fireMaintenance(data?.message || error);
+    const err = new Error(error);
+    err.status = 503;
+    err.isMaintenance = true;
     throw err;
   }
 
@@ -334,5 +358,14 @@ export const api = {
   },
   deleteOfficer(id, token) {
     return request(`/admin/officers/${id}`, { method: 'DELETE', token });
+  },
+  getMaintenancePublic() {
+    return request('/system/maintenance');
+  },
+  getMaintenanceAdmin(token) {
+    return request('/admin/maintenance', { token });
+  },
+  updateMaintenance(payload, token) {
+    return request('/admin/maintenance', { method: 'POST', body: payload, token });
   }
 };

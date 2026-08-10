@@ -11,6 +11,7 @@ import adminRoutes from './routes/admin.routes.js';
 import visitorRoutes from './routes/visitors.routes.js';
 import visitRoutes from './routes/visits.routes.js';
 import healthRoutes from './routes/health.routes.js';
+import systemRoutes from './routes/system.routes.js';
 import reportRoutes from './routes/reports.routes.js';
 import debugRoutes from './routes/debug.routes.js';
 import { errorHandler } from './middleware/errorHandler.js';
@@ -128,6 +129,7 @@ export function createApp() {
   app.use('/api/visits/export', exportLimiter);
 
   app.use('/api/health', healthRoutes);
+  app.use('/api/system', systemRoutes);
   app.use('/api/auth', authRoutes);
   app.use('/api/admin', adminRoutes);
   app.use('/api/visitors', visitorRoutes);

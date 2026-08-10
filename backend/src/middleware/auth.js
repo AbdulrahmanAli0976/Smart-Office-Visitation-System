@@ -1,8 +1,9 @@
-﻿import jwt from 'jsonwebtoken';
+import jwt from 'jsonwebtoken';
 import * as Sentry from '@sentry/node';
 import { env } from '../config/env.js';
 import { findUserById } from '../services/userService.js';
 import { isTokenBlacklisted } from '../services/authService.js';
+import { getMaintenanceStatus } from '../services/systemService.js';
 import { fail } from '../utils/response.js';
 import { logStorage } from '../utils/logger.js';
 import { normalizeRole, normalizeStatus } from '../utils/roleUtils.js';
@@ -27,6 +28,21 @@ export async function requireAuth(req, res, next) {
     const normalizedRole = normalizeRole(payload?.role);
     const normalizedStatus = normalizeStatus(payload?.status);
     const id = payload?.id ?? payload?.userId;
+    const iat = payload?.iat ? payload.iat * 1000 : null;
+
+    // Maintenance Mode & Role-aware Session Revocation Check
+    if (normalizedRole !== 'ADMIN') {
+      const maintenanceState = await getMaintenanceStatus();
+      if (maintenanceState.officers_revoked_at && iat && iat < maintenanceState.officers_revoked_at) {
+        return fail(res, 'Token has been revoked', 401);
+      }
+      if (maintenanceState.maintenance) {
+        return fail(res, 'Visitor Hub is temporarily unavailable while maintenance is in progress.', 503, {
+          maintenance: true,
+          message: maintenanceState.message
+        });
+      }
+    }
 
     req.user = {
       ...payload,

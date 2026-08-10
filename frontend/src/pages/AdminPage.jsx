@@ -17,6 +17,10 @@ export default function AdminPage() {
   const [officerStatus, setOfficerStatus] = useState('');
   const [error, setError] = useState('');
 
+  const [maintenance, setMaintenance] = useState(false);
+  const [maintenanceMessage, setMaintenanceMessage] = useState('');
+  const [maintenanceLoading, setMaintenanceLoading] = useState(false);
+
   const noticeRef = useScrollToError(error);
 
   const refreshOfficers = async (authToken, overrides = {}, signal) => {
@@ -46,10 +50,28 @@ export default function AdminPage() {
     }
   };
 
+  const refreshMaintenance = async (authToken, signal) => {
+    if (!authToken || !user) return;
+    setMaintenanceLoading(true);
+    try {
+      const status = await api.getMaintenanceAdmin(authToken, { signal });
+      setMaintenance(Boolean(status.maintenance));
+      setMaintenanceMessage(status.message || '');
+    } catch (err) {
+      if (err.name === 'AbortError') return;
+      if (!handleAuthFailure(err)) {
+        setError(err.message);
+      }
+    } finally {
+      setMaintenanceLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (!token || !user) return;
     const controller = new AbortController();
     refreshOfficers(token, {}, controller.signal);
+    refreshMaintenance(token, controller.signal);
     return () => controller.abort();
   }, [token, user, officerPage, officerSearch, officerStatus]);
 
@@ -122,6 +144,28 @@ export default function AdminPage() {
     }
   };
 
+  const handleMaintenancePost = async (enabled) => {
+    setError('');
+    if (!token || !user) return;
+    setMaintenanceLoading(true);
+    try {
+      const payload = {
+        enabled,
+        message: maintenanceMessage.trim() || 'Kindly be patient with us. There\'s a maintenance going on, which will be resolved shortly.'
+      };
+      const status = await api.updateMaintenance(payload, token);
+      setMaintenance(Boolean(status.maintenance));
+      setMaintenanceMessage(status.message || '');
+      toast.success(enabled ? 'Maintenance enabled' : 'Maintenance disabled');
+    } catch (err) {
+      if (!handleAuthFailure(err)) {
+        setError(err.message);
+      }
+    } finally {
+      setMaintenanceLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-8">
       <header className="flex flex-col gap-3">
@@ -138,6 +182,46 @@ export default function AdminPage() {
           {error}
         </div>
       )}
+
+      <section className="clay-card space-y-5 p-5 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="eyebrow">System controls</p>
+            <h2 className="section-title">Maintenance mode</h2>
+          </div>
+          <span className={`status-pill ${maintenance ? 'status-pill-danger' : 'status-pill-success'}`}>{maintenance ? 'MAINTENANCE ACTIVE' : 'SYSTEM OPERATIONAL'}</span>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-start">
+          <div>
+            <label className="block text-xs font-bold uppercase tracking-[0.12em] text-slate-500 mb-2">Maintenance message</label>
+            <textarea
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900 shadow-inner"
+              rows="4"
+              value={maintenanceMessage}
+              onChange={(event) => setMaintenanceMessage(event.target.value)}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2 md:flex-col md:items-stretch">
+            <button
+              type="button"
+              className="button-primary"
+              disabled={maintenanceLoading}
+              onClick={() => handleMaintenancePost(true)}
+            >
+              Enable Maintenance
+            </button>
+            <button
+              type="button"
+              className="button-secondary"
+              disabled={maintenanceLoading}
+              onClick={() => handleMaintenancePost(false)}
+            >
+              Disable Maintenance
+            </button>
+          </div>
+        </div>
+      </section>
 
       <AdminPanel
         officers={adminOfficers}

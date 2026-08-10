@@ -8,6 +8,7 @@ import VisitorsPage from './pages/VisitorsPage.jsx';
 import VisitsPage from './pages/VisitsPage.jsx';
 import ReportsPage from './pages/ReportsPage.jsx';
 import AdminPage from './pages/AdminPage.jsx';
+import MaintenancePage from './pages/MaintenancePage.jsx';
 import { AuthContext } from './context/AuthContext.jsx';
 import { normalizeUser } from './utils/auth.js';
 import { api, setLoggingOut } from './api.js';
@@ -187,6 +188,8 @@ function AppRoutes() {
     return false;
   };
 
+  const [maintenanceMsg, setMaintenanceMsg] = useState('');
+
   useEffect(() => {
     const handler = (event) => {
       const reason = event?.detail?.reason;
@@ -195,6 +198,24 @@ function AppRoutes() {
     window.addEventListener('auth:logout', handler);
     return () => window.removeEventListener('auth:logout', handler);
   }, [logout]);
+
+  useEffect(() => {
+    const handler = (event) => {
+      const msg = event?.detail?.message || "Kindly be patient with us. There's a maintenance going on, which will be resolved shortly.";
+      const currentUser = user || (localStorage.getItem('vms_user') ? JSON.parse(localStorage.getItem('vms_user')) : null);
+      if (currentUser?.role === USER_ROLES.ADMIN) {
+        return; // ADMIN remains functional inside app
+      }
+      setToken('');
+      setUser(null);
+      localStorage.removeItem('vms_token');
+      localStorage.removeItem('vms_user');
+      setMaintenanceMsg(msg);
+      navigate('/maintenance', { replace: true });
+    };
+    window.addEventListener('auth:maintenance', handler);
+    return () => window.removeEventListener('auth:maintenance', handler);
+  }, [user, navigate]);
 
   const handleLogin = async (payload) => {
     setAuthError('');
@@ -217,7 +238,15 @@ function AppRoutes() {
       setAuthMessage('Login successful.');
       navigate('/dashboard', { replace: true });
     } catch (err) {
-      setAuthError(err.message);
+      if (err.status === 503 || err.isMaintenance) {
+        setAuthError('Visitor Hub is temporarily unavailable while maintenance is in progress.');
+      } else if (err.status === 429) {
+        setAuthError('Too many sign-in attempts. Please wait a moment before trying again.');
+      } else if (err.status === 401 || err.status === 400) {
+        setAuthError('Unable to sign in with those credentials.');
+      } else {
+        setAuthError(err.message || 'Unable to sign in with those credentials.');
+      }
     } finally {
       setAuthLoading(false);
     }
@@ -267,6 +296,18 @@ function AppRoutes() {
               loading={authLoading}
               error={authError}
               message={authMessage}
+            />
+          )}
+        />
+        <Route
+          path="/maintenance"
+          element={(
+            <MaintenancePage
+              message={maintenanceMsg}
+              onReturnToLogin={() => {
+                setMaintenanceMsg('');
+                navigate('/login', { replace: true });
+              }}
             />
           )}
         />
